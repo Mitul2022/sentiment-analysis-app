@@ -25,7 +25,7 @@ def run_query(query, params=None, fetch=False, many=False):
 def get_user(username):
     try:
         rows = run_query(
-            "SELECT user_id, username, password_hash, totp_secret FROM users WHERE username = %s;",
+            "SELECT user_id, username, password_hash, totp_secret FROM nlp.users WHERE username = %s;",
             (username,), fetch=True
         )
         if not rows:
@@ -47,7 +47,7 @@ def get_user(username):
 
 def update_totp_secret(user_id, secret):
     try:
-        run_query("UPDATE users SET totp_secret = %s WHERE user_id = %s;", (secret, user_id))
+        run_query("UPDATE nlp.users SET totp_secret = %s WHERE user_id = %s;", (secret, user_id))
     except Exception as e:
         st.error(f"🚨 Failed to update TOTP secret: {e}")
 
@@ -70,7 +70,7 @@ def registration_page():
         try:
             # Check if user already exists
             exists = run_query(
-                "SELECT 1 FROM users WHERE username = %s;", 
+                "SELECT 1 FROM nlp.users WHERE username = %s;", 
                 (new_username,), fetch=True
             )
             if exists:
@@ -83,7 +83,7 @@ def registration_page():
 
             # Attempt DB insert
             run_query(
-                "INSERT INTO users (username, password_hash, totp_secret) VALUES (%s, %s, %s);",
+                "INSERT INTO nlp.users (username, password_hash, totp_secret) VALUES (%s, %s, %s);",
                 (new_username, hashed, secret)
             )
 
