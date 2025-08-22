@@ -170,7 +170,7 @@ if auth_controller():
             filtered_df = df.copy()
             
             if filtered_cat_cols:
-                st.markdown("### Optional: Filter by a categorical column")
+                st.markdown("###Filter by a categorical column (Optional)")
             
                 # Let user select a single categorical column to filter by
                 selected_filter_column = st.selectbox(
