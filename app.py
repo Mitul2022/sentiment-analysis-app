@@ -526,8 +526,8 @@ if auth_controller():
         else:
             col3.metric("Top Negative", "-")
     
-        # Second row: 2 columns for last 2 KPIs
-        col4, col5 = st.columns(2)
+        # Second row: 2 columns for 4th KPI
+        col4, _ = st.columns([2, 1])  # leave space empty for alignment
     
         # 4. Highest Negative %
         if not summary_df.empty and all(col in summary_df.columns for col in ['Negative', 'Total Mentions']):
@@ -538,6 +538,10 @@ if auth_controller():
         else:
             col4.metric("Highest Negative %", "-")
     
+        # Third row: full width for 5th KPI
+        col_full = st.columns(1)
+        col = col_full[0]
+    
         # 5. Most Polarizing
         needed_columns = ['Positive (%)', 'Negative (%)', 'Neutral (%)']
         if not summary_df.empty and all(col in summary_df.columns for col in needed_columns):
@@ -545,14 +549,15 @@ if auth_controller():
             filtered_df = summary_df[summary_df['Neutral (%)'] < 50]
             if not filtered_df.empty:
                 polarizing = filtered_df.sort_values(by="Polarity Gap", ascending=True).iloc[0]
-                col5.metric(
+                col.metric(
                     "Most Polarizing",
                     f"{polarizing['Aspect']} ({polarizing['Positive (%)']:.1f}% 👍 / {polarizing['Negative (%)']:.1f}% 👎)"
                 )
             else:
-                col5.metric("Most Polarizing", "-")
+                col.metric("Most Polarizing", "-")
         else:
-            col5.metric("Most Polarizing", "-")
+            col.metric("Most Polarizing", "-")
+
 
     def plot_overall_sentiment(df_out):
         st.markdown("**Overall Sentiment Distribution (All Aspects)**")
