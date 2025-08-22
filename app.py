@@ -576,7 +576,8 @@ if auth_controller():
             # Show summary info
             uploaded_display = uploaded_count if uploaded_count else 0
             filtered_display = filtered_count if filtered_count else 0
-            analysed_count = len(df_out)
+            filtered_out = uploaded_display - filtered_display
+            analysed_count = filtered_display  # actual analysed after filtering
             unique_aspects = summary_df['Aspect'].nunique()
             total_mentions = len(df_out)
 
@@ -585,7 +586,7 @@ if auth_controller():
                 <p><b>Data Summary & Processing</b></p>
                 <ul style="list-style-type:none; padding-left: 0;">
                     <li>Uploaded Reviews: {uploaded_display:,}</li>
-                    <li>Filtered Out: {uploaded_display - filtered_display:,}</li>
+                    <li>Filtered Out: {filtered_out:,}</li>
                     <li>Analysed Reviews: {analysed_count:,}</li>
                     <li>Unique Aspects: {unique_aspects}</li>
                     <li>Total Aspect Mentions: {total_mentions}</li>
