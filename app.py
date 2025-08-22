@@ -163,23 +163,40 @@ if auth_controller():
             except Exception:
                 auto_nps_col = ""
 
-            # Detect supplier column for filtering (optional)
-            supplier_cols_candidates = ['supplier', 'supplier_name', 'vendor', 'vendor_name']
-            supplier_col = None
-            for col in supplier_cols_candidates:
-                if col in df.columns:
-                    supplier_col = col
-                    break
-
+            # Detect all categorical columns with manageable cardinality (e.g., max 100 unique values)
+            cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            filtered_cat_cols = [col for col in cat_cols if df[col].nunique() <= 100]
+            
             filtered_df = df.copy()
-
-            if supplier_col:
-                all_suppliers = filtered_df[supplier_col].dropna().unique().tolist()
-                selected_suppliers = st.multiselect(f"Filter by {supplier_col.title()} (optional)", options=all_suppliers)
-                if selected_suppliers:
-                    filtered_df = filtered_df[filtered_df[supplier_col].isin(selected_suppliers)].copy()
+            
+            if filtered_cat_cols:
+                st.markdown("### Optional: Filter by categorical columns")
+            
+                # Let user select which categorical columns to filter by
+                selected_filter_columns = st.multiselect(
+                    "Select categorical columns to filter (optional):",
+                    options=filtered_cat_cols
+                )
+            
+                # For each selected categorical column, show a multi-select of its unique values sorted by frequency descending
+                for col in selected_filter_columns:
+                    value_counts = filtered_df[col].value_counts(dropna=True)
+                    sorted_values = value_counts.index.tolist()
+            
+                    selected_values = st.multiselect(
+                        f"Filter by values in '{col}' (optional):",
+                        options=sorted_values,
+                        key=f"filter_values_{col}"
+                    )
+            
+                    if selected_values:
+                        filtered_df = filtered_df[filtered_df[col].isin(selected_values)].copy()
+            
+                # Notify user if filtering excluded some rows
                 if len(filtered_df) < len(df):
-                    st.info(f"Filtered out {len(df) - len(filtered_df):,} reviews by supplier selection.")
+                    st.info(f"Filtered out {len(df) - len(filtered_df):,} reviews by categorical filters.")
+            else:
+                filtered_df = df.copy()
 
             # Remove invalid reviews
             invalid_markers = {'', 'unidentified', 'na', 'n/a', 'none', 'no review', 'unknown', 'nan', 'null', 'undefined', 'no_review', '-', '--', 'review unavailable', 'n\\a', '[blank]'}
