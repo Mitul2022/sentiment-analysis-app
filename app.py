@@ -499,45 +499,42 @@ if auth_controller():
         st.pyplot(fig)
         plt.close()
 
-    def show_eda_metrics(df, summary_df, review_col):
+    def show_eda_metrics_split_rows(df, summary_df, review_col):
         st.markdown("<h3>🔍 Data Summary & Analytics</h3>", unsafe_allow_html=True)
-        col1, col2, col3, col4, col5 = st.columns(5)
+    
+        analysed_count = len(df)
+    
+        # First row: 3 columns for first 3 KPIs
+        col1, col2, col3 = st.columns(3)
     
         # 1. Total Reviews
-        analysed_count = len(df)
         col1.metric("Total Reviews", f"{analysed_count:,}")
     
         # 2. Top Positive
         if not summary_df.empty and 'Positive' in summary_df.columns and summary_df['Positive'].notnull().any():
             sorted_pos_df = summary_df.sort_values(by="Positive", ascending=False)
-            if not sorted_pos_df.empty:
-                top_positive = sorted_pos_df.iloc[0]
-                col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
-            else:
-                col2.metric("Top Positive", "-")
+            top_positive = sorted_pos_df.iloc[0]
+            col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
         else:
             col2.metric("Top Positive", "-")
     
         # 3. Top Negative
         if not summary_df.empty and 'Negative' in summary_df.columns and summary_df['Negative'].notnull().any():
             sorted_neg_df = summary_df.sort_values(by="Negative", ascending=False)
-            if not sorted_neg_df.empty:
-                top_negative = sorted_neg_df.iloc[0]
-                col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
-            else:
-                col3.metric("Top Negative", "-")
+            top_negative = sorted_neg_df.iloc[0]
+            col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
         else:
             col3.metric("Top Negative", "-")
+    
+        # Second row: 2 columns for last 2 KPIs
+        col4, col5 = st.columns(2)
     
         # 4. Highest Negative %
         if not summary_df.empty and all(col in summary_df.columns for col in ['Negative', 'Total Mentions']):
             summary_df['Neg Ratio'] = summary_df['Negative'] / summary_df['Total Mentions']
             sorted_neg_ratio_df = summary_df.sort_values(by="Neg Ratio", ascending=False)
-            if not sorted_neg_ratio_df.empty:
-                worst_skewed = sorted_neg_ratio_df.iloc[0]
-                col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
-            else:
-                col4.metric("Highest Negative %", "-")
+            worst_skewed = sorted_neg_ratio_df.iloc[0]
+            col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
         else:
             col4.metric("Highest Negative %", "-")
     
@@ -550,7 +547,7 @@ if auth_controller():
                 polarizing = filtered_df.sort_values(by="Polarity Gap", ascending=True).iloc[0]
                 col5.metric(
                     "Most Polarizing",
-                    f"{polarizing['Aspect']} ({polarizing['Positive (%)']:.1f}% / {polarizing['Negative (%)']:.1f}% / {polarizing['Neutral (%)']:.1f}%)"
+                    f"{polarizing['Aspect']} ({polarizing['Positive (%)']:.1f}% 👍 / {polarizing['Negative (%)']:.1f}% 👎)"
                 )
             else:
                 col5.metric("Most Polarizing", "-")
