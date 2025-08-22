@@ -511,7 +511,7 @@ if auth_controller():
         if not summary_df.empty and 'Positive' in summary_df.columns and summary_df['Positive'].notnull().any():
             sorted_pos_df = summary_df.sort_values(by="Positive", ascending=False)
             if not sorted_pos_df.empty:
-                top_positive = sorted_pos_df.iloc
+                top_positive = sorted_pos_df.iloc[0]
                 col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
             else:
                 col2.metric("Top Positive", "-")
@@ -522,7 +522,7 @@ if auth_controller():
         if not summary_df.empty and 'Negative' in summary_df.columns and summary_df['Negative'].notnull().any():
             sorted_neg_df = summary_df.sort_values(by="Negative", ascending=False)
             if not sorted_neg_df.empty:
-                top_negative = sorted_neg_df.iloc
+                top_negative = sorted_neg_df.iloc[0]
                 col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
             else:
                 col3.metric("Top Negative", "-")
@@ -534,7 +534,7 @@ if auth_controller():
             summary_df['Neg Ratio'] = summary_df['Negative'] / summary_df['Total Mentions']
             sorted_neg_ratio_df = summary_df.sort_values(by="Neg Ratio", ascending=False)
             if not sorted_neg_ratio_df.empty:
-                worst_skewed = sorted_neg_ratio_df.iloc
+                worst_skewed = sorted_neg_ratio_df.iloc[0]
                 col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
             else:
                 col4.metric("Highest Negative %", "-")
