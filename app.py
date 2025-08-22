@@ -499,27 +499,50 @@ if auth_controller():
         st.pyplot(fig)
         plt.close()
 
-
     def show_eda_metrics(df, summary_df, review_col):
         st.markdown("<h3>🔍 Data Summary & Analytics</h3>", unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5)
-
-        lengths = df[review_col].astype(str).str.len()
-        avg_len = int(lengths.mean())
-
-        col1.metric("Total Reviews", f"{len(df):,}")
-        col2.metric("Avg Review Length", f"{avg_len} chars")
-        col3.metric("Total Aspects Found", f"{summary_df['Aspect'].nunique()}")
-        col4.metric("Top Aspect", summary_df.iloc[0]['Aspect'] if not summary_df.empty else "-")
-        if "Avg NPS" in summary_df.columns:
-            try:
-                avg_nps_val = pd.to_numeric(summary_df["Avg NPS"], errors='coerce').mean()
-                col5.metric("Average NPS", f"{avg_nps_val:.2f}")
-            except Exception:
-                col5.metric("Average NPS", "N/A")
+    
+        # 1. Total Reviews (review-level count, analysed only)
+        analysed_count = len(df)
+        col1.metric("Total Reviews", f"{analysed_count:,}")
+    
+        # 2. Top Positive (by volume)
+        if not summary_df.empty:
+            top_positive = summary_df.sort_values(by="Positive", ascending=False).iloc[0]
+            col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
         else:
-            col5.metric("Average NPS", "N/A")
-
+            col2.metric("Top Positive", "-")
+    
+        # 3. Top Negative (by volume)
+        if not summary_df.empty:
+            top_negative = summary_df.sort_values(by="Negative", ascending=False).iloc
+            col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
+        else:
+            col3.metric("Top Negative", "-")
+    
+        # 4. Highest Negative % (most negative skewed aspect)
+        if not summary_df.empty:
+            summary_df['Neg Ratio'] = summary_df['Negative'] / summary_df['Total Mentions']
+            worst_skewed = summary_df.sort_values(by="Neg Ratio", ascending=False).iloc
+            col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
+        else:
+            col4.metric("Highest Negative %", "-")
+    
+        # 5. Most Polarizing (balanced pos vs neg)
+        if not summary_df.empty:
+            summary_df['Polarity Gap'] = abs(summary_df['Positive (%)'] - summary_df['Negative (%)'])
+            filtered_df = summary_df[summary_df['Neutral (%)'] < 50]
+            if not filtered_df.empty:
+                polarizing = filtered_df.sort_values(by="Polarity Gap", ascending=True).iloc
+                col5.metric(
+                    "Most Polarizing",
+                    f"{polarizing['Aspect']} ({polarizing['Positive (%)']:.1f}% / {polarizing['Negative (%)']:.1f}% / {polarizing['Neutral (%)']:.1f}%)"
+                )
+            else:
+                col5.metric("Most Polarizing", "-")
+        else:
+            col5.metric("Most Polarizing", "-")
 
     def plot_overall_sentiment(df_out):
         st.markdown("**Overall Sentiment Distribution (All Aspects)**")
