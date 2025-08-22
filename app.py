@@ -170,27 +170,31 @@ if auth_controller():
             filtered_df = df.copy()
             
             if filtered_cat_cols:
-                st.markdown("###Filter by a categorical column (Optional)")
+                st.markdown("### Filter by a categorical column (Optional)")
             
                 # Let user select a single categorical column to filter by
                 selected_filter_column = st.selectbox(
                     "Select a categorical column to filter (optional):",
-                    options=filtered_cat_cols
+                    options=["None"] + filtered_cat_cols,
+                    index=0
                 )
-            
+                
+                if selected_filter_column == "None":
+                    selected_filter_column = None
+                    
                 if selected_filter_column:
                     value_counts = filtered_df[selected_filter_column].value_counts(dropna=True)
                     sorted_values = value_counts.index.tolist()
-            
+                
                     selected_values = st.multiselect(
                         f"Filter by values in '{selected_filter_column}' (optional):",
                         options=sorted_values,
                         key=f"filter_values_{selected_filter_column}"
                     )
-            
+                
                     if selected_values:
                         filtered_df = filtered_df[filtered_df[selected_filter_column].isin(selected_values)].copy()
-            
+
                 # Notify user if filtering excluded some rows
                 if len(filtered_df) < len(df):
                     st.info(f"Filtered out {len(df) - len(filtered_df):,} reviews by categorical filter.")
