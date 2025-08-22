@@ -499,7 +499,7 @@ if auth_controller():
         st.pyplot(fig)
         plt.close()
 
-    def show_eda_metrics_split_rows(df, summary_df, review_col):
+    def show_eda_metrics(df, summary_df, review_col):
         st.markdown("<h3>🔍 Data Summary & Analytics</h3>", unsafe_allow_html=True)
     
         analysed_count = len(df)
