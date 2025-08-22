@@ -173,7 +173,7 @@ if auth_controller():
                 st.markdown("### Optional: Filter by categorical columns")
             
                 # Let user select which categorical columns to filter by
-                selected_filter_columns = st.multiselect(
+                selected_filter_columns = st.selectbox(
                     "Select categorical columns to filter (optional):",
                     options=filtered_cat_cols
                 )
