@@ -503,38 +503,51 @@ if auth_controller():
         st.markdown("<h3>🔍 Data Summary & Analytics</h3>", unsafe_allow_html=True)
         col1, col2, col3, col4, col5 = st.columns(5)
     
-        # 1. Total Reviews (review-level count, analysed only)
+        # 1. Total Reviews
         analysed_count = len(df)
         col1.metric("Total Reviews", f"{analysed_count:,}")
     
-        # 2. Top Positive (by volume)
-        if not summary_df.empty:
-            top_positive = summary_df.sort_values(by="Positive", ascending=False).iloc[0]
-            col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
+        # 2. Top Positive
+        if not summary_df.empty and 'Positive' in summary_df.columns and summary_df['Positive'].notnull().any():
+            sorted_pos_df = summary_df.sort_values(by="Positive", ascending=False)
+            if not sorted_pos_df.empty:
+                top_positive = sorted_pos_df.iloc
+                col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
+            else:
+                col2.metric("Top Positive", "-")
         else:
             col2.metric("Top Positive", "-")
     
-        # 3. Top Negative (by volume)
-        if not summary_df.empty:
-            top_negative = summary_df.sort_values(by="Negative", ascending=False).iloc
-            col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
+        # 3. Top Negative
+        if not summary_df.empty and 'Negative' in summary_df.columns and summary_df['Negative'].notnull().any():
+            sorted_neg_df = summary_df.sort_values(by="Negative", ascending=False)
+            if not sorted_neg_df.empty:
+                top_negative = sorted_neg_df.iloc
+                col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
+            else:
+                col3.metric("Top Negative", "-")
         else:
             col3.metric("Top Negative", "-")
     
-        # 4. Highest Negative % (most negative skewed aspect)
-        if not summary_df.empty:
+        # 4. Highest Negative %
+        if not summary_df.empty and all(col in summary_df.columns for col in ['Negative', 'Total Mentions']):
             summary_df['Neg Ratio'] = summary_df['Negative'] / summary_df['Total Mentions']
-            worst_skewed = summary_df.sort_values(by="Neg Ratio", ascending=False).iloc
-            col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
+            sorted_neg_ratio_df = summary_df.sort_values(by="Neg Ratio", ascending=False)
+            if not sorted_neg_ratio_df.empty:
+                worst_skewed = sorted_neg_ratio_df.iloc
+                col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
+            else:
+                col4.metric("Highest Negative %", "-")
         else:
             col4.metric("Highest Negative %", "-")
     
-        # 5. Most Polarizing (balanced pos vs neg)
-        if not summary_df.empty:
+        # 5. Most Polarizing
+        needed_columns = ['Positive (%)', 'Negative (%)', 'Neutral (%)']
+        if not summary_df.empty and all(col in summary_df.columns for col in needed_columns):
             summary_df['Polarity Gap'] = abs(summary_df['Positive (%)'] - summary_df['Negative (%)'])
             filtered_df = summary_df[summary_df['Neutral (%)'] < 50]
             if not filtered_df.empty:
-                polarizing = filtered_df.sort_values(by="Polarity Gap", ascending=True).iloc
+                polarizing = filtered_df.sort_values(by="Polarity Gap", ascending=True).iloc[0]
                 col5.metric(
                     "Most Polarizing",
                     f"{polarizing['Aspect']} ({polarizing['Positive (%)']:.1f}% / {polarizing['Negative (%)']:.1f}% / {polarizing['Neutral (%)']:.1f}%)"
