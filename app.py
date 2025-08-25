@@ -1,3 +1,4 @@
+
 import streamlit as st
 st.set_page_config(page_title="SentimentIQ", page_icon="📊", layout="wide")
 
@@ -563,24 +564,20 @@ if auth_controller():
         st.markdown("**Overall Sentiment Distribution (All Aspects)**")
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
-    
-        # High DPI for sharper rendering
-        fig, ax = plt.subplots(figsize=(3, 2), dpi=200)  # ↑ DPI increased to 200
+
+        fig, ax = plt.subplots(figsize=(6, 4))
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
-            textprops={'fontsize': 4, 'fontweight': 'bold'},
-            radius=0.6  # ↓ Reduce radius
+            textprops={'fontsize': 14, 'fontweight': 'bold'}
         )
-    
-        for autotext in autotexts:
-            autotext.set_fontsize(4)
-    
         ax.set_aspect('equal')
+        ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
         st.pyplot(fig)
         plt.close(fig)
+
 
     # Main execution block
 
@@ -676,7 +673,7 @@ if auth_controller():
             plt.close(fig)
 
             # Continue other ngram plots
-            #plot_top_ngrams(df, review_col_actual, 2)
+            plot_top_ngrams(df, review_col_actual, 2)
             plot_top_ngrams(df, review_col_actual, 3)
             plot_top_ngrams(df, review_col_actual, 4)
 
