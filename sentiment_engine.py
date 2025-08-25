@@ -922,17 +922,16 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
     recommendations = []
     if top_issues:
         aspect_nice = aspect.title()
-        for issue in top_issues:
-            recommendations.append(
-                f"Address '{issue}' issues in {aspect_nice}."
-            )
-        recommendations.insert(0, f"{aspect_nice}: Prioritize fixing these top issues to increase satisfaction and reduce negative feedback")
+        issues_str = "', '".join(top_issues)  # Combine multiple issues into one string separated by "', '"
+        recommendations.append(
+            f"Address '{issues_str}' issues in {aspect_nice}."
+        )
     else:
         recommendations.append(
-                               f"No actionable recommendations for '{aspect}' at this time.")
-
+            f"No actionable recommendations for '{aspect}' at this time."
+        )
+    
     return recommendations[:10]
-
 
 def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
     def normalize(text):
