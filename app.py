@@ -564,24 +564,22 @@ if auth_controller():
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
     
-        fig, ax = plt.subplots(figsize=(4, 2.5))
+        fig, ax = plt.subplots(figsize=(3, 2))
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
-            textprops={'fontsize': 4, 'fontweight': 'bold'}  # Reduced 3x
+            textprops={'fontsize': 4, 'fontweight': 'bold'},
+            radius=0.6  # ↓ Reduce radius (default is 1.0)
         )
     
-        # Reduce percentage text (autotexts) size separately
         for autotext in autotexts:
-            autotext.set_fontsize(4)  # Also shrink percentage labels
+            autotext.set_fontsize(4)
     
         ax.set_aspect('equal')
         st.pyplot(fig)
         plt.close(fig)
-
-
 
     # Main execution block
 
