@@ -416,11 +416,9 @@ if auth_controller():
 
     def plot_top_ngrams(df, main_col=None, n=3, review_col=None, top_n=5):
         """
-        Plot top n-grams from ALL NEGATIVE reviews (deduplicated).
+        Plot top n-grams from NEGATIVE reviews.
         Supports n=3 (trigrams) and n=4 (four-grams).
-        Accepts either `main_col=` or `review_col=` as the text column name.
         """
-        # --- guardrails ---
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
@@ -428,7 +426,7 @@ if auth_controller():
             st.warning("Column 'Aspect_Sentiment' not found.")
             return
     
-        # unify arg names
+        # unify column name
         if review_col is None:
             review_col = main_col
     
@@ -438,32 +436,23 @@ if auth_controller():
             st.info("No negative reviews available.")
             return
     
-        # pick a usable text column
+        # check text column
         if review_col not in neg.columns or review_col is None:
-            # try to find a text-like column
             text_candidates = [c for c in neg.columns if neg[c].dtype == "object"]
             if not text_candidates:
-                st.info("No valid text columns found for n-gram analysis.")
+                st.info("No valid text columns found.")
                 return
             review_col = text_candidates[0]
     
-        # collect & clean texts; deduplicate to avoid aspect-repeat inflation
-        texts = (
-            neg[review_col]
-            .dropna()
-            .astype(str)
-            .str.strip()
-            .str.lower()
-            .drop_duplicates()
-            .tolist()
-        )
+        # collect texts (NO deduplication this time → weight matters)
+        texts = neg[review_col].dropna().astype(str).str.lower().tolist()
         if not texts:
             st.info("No valid text found in negative reviews.")
             return
     
-        # keep stopwords for longer phrases to preserve meaning
-        stop_words = None
-        cv = CountVectorizer(ngram_range=(n, n), stop_words=stop_words, max_features=500)
+        # stopwords for clarity
+        stop_words = 'english'
+        cv = CountVectorizer(ngram_range=(n, n), stop_words=stop_words, max_features=50)
     
         try:
             matrix = cv.fit_transform(texts)
@@ -478,10 +467,6 @@ if auth_controller():
             st.info("No frequent phrases found.")
             return
     
-        # sparse-data hint
-        if len(top_f) == top_n and all(c == 1 for _, c in top_f):
-            st.info("Note: All selected n-grams occur only once. Data may be too sparse for meaningful long n-grams.")
-    
         # plot
         labels, counts = zip(*top_f)
         fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
@@ -491,18 +476,17 @@ if auth_controller():
         ax.set_yticklabels(labels[::-1], fontsize=11)
         ax.set_xlabel("Frequency")
         title = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}[n]
-        ax.set_title(f"Top {len(labels)} {title} in All Negative Reviews")
+        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews")
     
         for bar in bars:
-            ax.annotate(
-                f"{int(bar.get_width())}",
-                (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
-                va="center", fontsize=9, fontweight="bold"
-            )
+            ax.annotate(f"{int(bar.get_width())}",
+                        (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
+                        va="center", fontsize=9, fontweight="bold")
     
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
+
 
     def plot_aspect_popularity(summary_df):
         st.markdown("**Most Discussed Aspects by Sentiment**")
