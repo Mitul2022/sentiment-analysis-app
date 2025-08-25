@@ -412,11 +412,11 @@ if auth_controller():
         wc = WordCloud(width=900, height=350, background_color='white', stopwords=STOPWORDS, max_words=120, colormap='Blues').generate(text_blob)
         st.image(wc.to_array(), use_container_width=True)
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
-    
+
     def plot_top_ngrams(df, main_col=None, n=3, review_col=None, top_n=5):
         """
-        Plot top n-grams from NEGATIVE reviews using TF-IDF for more meaningful ranking.
-        Focuses on top aspects for context.
+        Plot top n-grams from NEGATIVE reviews using TF-IDF for better relevance.
+        Auto-detects text column if not provided.
         """
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
@@ -425,53 +425,55 @@ if auth_controller():
             st.warning("Columns 'Aspect_Sentiment' and 'Aspect' are required.")
             return
     
-        if review_col is None:
-            review_col = main_col
+        # Use provided col name or fallback
+        review_col = review_col or main_col
+        if review_col not in df.columns:
+            text_candidates = [c for c in df.columns if df[c].dtype == "object"]
+            if not text_candidates:
+                st.info("No valid text column found.")
+                return
+            review_col = text_candidates[0]
     
-        # Filter only negative
+        # Filter negative reviews
         neg_df = df[df["Aspect_Sentiment"] == "Negative"]
         if neg_df.empty:
             st.info("No negative reviews available.")
             return
     
-        # Find top 5 aspects with most negative mentions
-        top_aspects = (
-            neg_df["Aspect"].value_counts().head(5).index.tolist()
-        )
+        # Focus on top 5 aspects
+        top_aspects = neg_df["Aspect"].value_counts().head(5).index.tolist()
         neg_df = neg_df[neg_df["Aspect"].isin(top_aspects)]
     
-        # Combine all negative texts
+        # Collect texts
         texts = neg_df[review_col].dropna().astype(str).str.lower().tolist()
         if not texts:
-            st.info("No text found for top negative aspects.")
+            st.info("No text available for negative reviews.")
             return
     
-        # Use TF-IDF for n-grams
+        # TF-IDF vectorizer
         tfidf = TfidfVectorizer(ngram_range=(n, n), stop_words='english', min_df=2)
         try:
             matrix = tfidf.fit_transform(texts)
             scores = zip(tfidf.get_feature_names_out(), matrix.sum(axis=0).A1)
             top_f = sorted(scores, key=lambda x: x[1], reverse=True)[:top_n]
-        except Exception:
-            st.info("Failed to compute n-grams.")
+        except Exception as e:
+            st.info(f"Failed to compute n-grams: {e}")
             return
     
         if not top_f:
             st.info("No meaningful n-grams found.")
             return
     
-        labels, scores = zip(*top_f)
-        scores = [round(s, 3) for s in scores]
-    
         # Plot
+        labels, scores = zip(*top_f)
         fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
         y_pos = np.arange(len(labels))
         bars = ax.barh(y_pos, scores[::-1], color="#d62728")
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
-        ax.set_xlabel("TF-IDF Score (Importance)")
+        ax.set_xlabel("TF-IDF Score")
         title = {3: "Trigrams", 4: "Four-Grams"}[n]
-        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews (Top 5 Negative Aspects)")
+        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews (Top 5 Aspects)")
     
         for bar in bars:
             ax.annotate(f"{bar.get_width():.3f}",
