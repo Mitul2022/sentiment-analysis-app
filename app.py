@@ -171,7 +171,7 @@ if auth_controller():
             filtered_df = df.copy()
             
             if filtered_cat_cols:
-                st.markdown("### Filter by a categorical column (Optional)")
+                #st.markdown("### Filter by a categorical column (Optional)")
             
                 # Let user select a single categorical column to filter by
                 selected_filter_column = st.selectbox(
@@ -236,7 +236,7 @@ if auth_controller():
 
             # Aspects selection
             COMMON_ASPECTS = ["Quality", "Delivery", "Price", "Customer Service", "Packaging", "Refund", "Order", "Website", "Value", "Communication"]
-            st.markdown("### Select up to 10 aspects (optional)")
+            #st.markdown("### Select up to 10 aspects (optional)")
             user_selected_aspects = st.multiselect("Choose common aspects", options=COMMON_ASPECTS)
             user_custom_aspects = st.text_input("Add custom aspects (comma-separated)")
 
