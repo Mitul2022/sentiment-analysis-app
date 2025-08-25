@@ -571,7 +571,8 @@ if auth_controller():
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
-            textprops={'fontsize': 14, 'fontweight': 'bold'}
+            textprops={'fontsize': 8, 'fontweight': 'bold'},
+            radius=0.6
         )
         ax.set_aspect('equal')
         #ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
