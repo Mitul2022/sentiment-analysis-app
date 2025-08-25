@@ -414,28 +414,39 @@ if auth_controller():
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
 
-    def plot_top_ngrams(df, main_col, n):
+    def plot_top_ngrams(df, summary_df, main_col, n):
         """
-        Plot top n-grams from NEGATIVE reviews only.
+        Plot top n-grams from NEGATIVE reviews only for top 5 negative aspects.
         Supports only n=3 (trigrams) and n=4 (four-grams).
         """
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
     
-        top_n = 5  # Fixed number of n-grams to display
+        top_n = 5
         ngram_titles = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}
         title = ngram_titles[n]
     
-        # Filter only negative sentiment reviews
-        if "Aspect_Sentiment" not in df.columns:
-            st.warning("Sentiment column 'Aspect_Sentiment' not found in data.")
+        if "Aspect_Sentiment" not in df.columns or "Aspect" not in df.columns:
+            st.warning("Required columns (Aspect, Aspect_Sentiment) not found.")
             return
     
-        negative_reviews = df[df["Aspect_Sentiment"] == "Negative"]
+        # Get top 5 negative aspects
+        top_negative_aspects = summary_df.sort_values(by="Negative", ascending=False).head(5)["Aspect"].tolist()
+    
+        # Filter only negative reviews for those aspects
+        negative_reviews = df[(df["Aspect_Sentiment"] == "Negative") & (df["Aspect"].isin(top_negative_aspects))]
         if negative_reviews.empty:
-            st.info("No negative reviews available for n-gram analysis.")
+            st.info("No negative reviews available for top negative aspects.")
             return
+    
+        # Validate review column
+        if main_col not in negative_reviews.columns:
+            text_candidates = [col for col in negative_reviews.columns if negative_reviews[col].dtype == "object"]
+            if not text_candidates:
+                st.info("No text column found for n-gram analysis.")
+                return
+            main_col = text_candidates[0]
     
         texts = negative_reviews[main_col].dropna().astype(str).tolist()
         if not texts:
@@ -443,36 +454,37 @@ if auth_controller():
             return
     
         # Generate n-grams
-        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=50)
+        cv = CountVectorizer(ngram_range=(n, n), stop_words="english", max_features=50)
         try:
             matrix = cv.fit_transform(texts)
             sums = matrix.sum(axis=0)
             freq = [(word, sums[0, idx]) for word, idx in cv.vocabulary_.items()]
             top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
         except Exception:
-            top_f = []
+            st.info("Failed to compute n-grams.")
+            return
     
         if not top_f:
-            st.info("No frequent phrases found in negative reviews.")
+            st.info("No frequent phrases found.")
             return
     
         # Plot horizontal bar chart
         labels, counts = zip(*top_f)
         fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
         y_pos = np.arange(len(labels))
-        bars = ax.barh(y_pos, counts[::-1], color='#d62728')  # Red for negative
+        bars = ax.barh(y_pos, counts[::-1], color="#d62728")  # Red for negative
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
         ax.set_xlabel("Frequency")
-        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews")
+        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews (Top 5 Aspects)")
     
         for bar in bars:
             ax.annotate(
                 f"{int(bar.get_width())}",
                 (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
-                va='center',
+                va="center",
                 fontsize=9,
-                fontweight='bold'
+                fontweight="bold"
             )
     
         plt.tight_layout()
@@ -711,8 +723,8 @@ if auth_controller():
 
             # Continue other ngram plots
             # For trigrams
-            plot_top_ngrams(df_out, review_col_actual, 3)
-            plot_top_ngrams(df_out, review_col_actual, 4)
+            plot_top_ngrams(df_out, summary_df, review_col_actual, 3)
+            plot_top_ngrams(df_out, summary_df, review_col_actual, 4)
 
             # Downloads
             col1, col2, col3 = st.columns([3, 3, 4])
