@@ -117,26 +117,31 @@ if auth_controller():
     """, unsafe_allow_html=True)
 
     # File upload, loading, cleaning, and UI for selecting columns + aspects
-    uploaded_file = st.file_uploader("📂 Upload your reviews file (CSV or XLSX)", type=["csv", "xlsx"])
+    st.markdown(
+        "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>📂 Upload your reviews file (CSV or XLSX)</h3>",
+        unsafe_allow_html=True,
+    )
+    uploaded_file = st.file_uploader("", type=["csv", "xlsx"])
+    
     df = None
     df_error = None
-
+    
     def clear_analysis_state():
         for key in ["absa_results", "absa_summary", "top_neg_reviews_by_aspect", "pdf_bytes", "chat_suggestions", "messages"]:
             if key in st.session_state:
                 del st.session_state[key]
-
+    
     user_aspects = []
     uploaded_count = None
     filtered_count = None
     num_after = None
-
+    
     if uploaded_file:
         # Reset session if new file uploaded
         if "current_file_name" not in st.session_state or st.session_state["current_file_name"] != uploaded_file.name:
             clear_analysis_state()
             st.session_state["current_file_name"] = uploaded_file.name
-
+    
         with st.spinner("Loading data..."):
             try:
                 if uploaded_file.name.lower().endswith(".csv"):
@@ -148,110 +153,148 @@ if auth_controller():
                     st.warning("Large file detected; processing may take longer.")
             except Exception as e:
                 df_error = f"Failed to load file: {e}"
-
+    
         if df is not None:
             uploaded_count = len(df)
-
+    
             # Auto detect columns for reviews and NPS
             try:
                 auto_review_col = auto_detect_review_column(df)
             except Exception as e:
                 auto_review_col = df.columns[0] if len(df.columns) > 0 else ""
                 st.error(f"Auto-detect review column failed: {e}")
-
+    
             try:
                 auto_nps_col = auto_detect_nps_column(df)
             except Exception:
                 auto_nps_col = ""
-
+    
             # Detect all categorical columns with manageable cardinality (e.g., max 100 unique values)
-            cat_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
+            cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
             filtered_cat_cols = [col for col in cat_cols if df[col].nunique() <= 100]
-            
+    
             filtered_df = df.copy()
-            
+    
             if filtered_cat_cols:
-                #st.markdown("### Filter by a categorical column (Optional)")
-            
+                st.markdown(
+                    "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Select a categorical column to filter (optional):</h3>",
+                    unsafe_allow_html=True,
+                )
+    
                 # Let user select a single categorical column to filter by
                 selected_filter_column = st.selectbox(
-                    "Select a categorical column to filter (optional):",
+                    "",
                     options=["None"] + filtered_cat_cols,
-                    index=0
+                    index=0,
                 )
-                
+    
                 if selected_filter_column == "None":
                     selected_filter_column = None
-                    
+    
                 if selected_filter_column:
                     value_counts = filtered_df[selected_filter_column].value_counts(dropna=True)
                     sorted_values = value_counts.index.tolist()
-                
-                    selected_values = st.multiselect(
-                        f"Filter by values in '{selected_filter_column}' (optional):",
-                        options=sorted_values,
-                        key=f"filter_values_{selected_filter_column}"
+    
+                    st.markdown(
+                        f"<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Filter by values in '{selected_filter_column}' (optional):</h3>",
+                        unsafe_allow_html=True,
                     )
-                
+                    selected_values = st.multiselect(
+                        "",
+                        options=sorted_values,
+                        key=f"filter_values_{selected_filter_column}",
+                    )
+    
                     if selected_values:
                         filtered_df = filtered_df[filtered_df[selected_filter_column].isin(selected_values)].copy()
-
+    
                 # Notify user if filtering excluded some rows
                 if len(filtered_df) < len(df):
                     st.info(f"Filtered out {len(df) - len(filtered_df):,} reviews by categorical filter.")
             else:
                 filtered_df = df.copy()
-
-
+    
             # Remove invalid reviews
-            invalid_markers = {'', 'unidentified', 'na', 'n/a', 'none', 'no review', 'unknown', 'nan', 'null', 'undefined', 'no_review', '-', '--', 'review unavailable', 'n\\a', '[blank]'}
+            invalid_markers = {
+                "",
+                "unidentified",
+                "na",
+                "n/a",
+                "none",
+                "no review",
+                "unknown",
+                "nan",
+                "null",
+                "undefined",
+                "no_review",
+                "-",
+                "--",
+                "review unavailable",
+                "n\\a",
+                "[blank]",
+            }
+    
             def is_valid_review(v):
                 if pd.isna(v):
                     return False
                 s = str(v).strip().lower()
                 return s not in invalid_markers and len(s) > 0
-
+    
             before_count = len(filtered_df)
             filtered_df = filtered_df[filtered_df[auto_review_col].apply(is_valid_review)].copy()
             filtered_count = len(filtered_df)
             num_after = filtered_count
             filtered_out = before_count - filtered_count
-
+    
             if filtered_out > 0:
                 st.info(f"Filtered out {filtered_out:,} invalid or blank reviews.")
-
+    
             if filtered_df.empty:
                 st.error("No valid reviews after filtering. Please check your file.")
-
+    
             # UI elements for selecting columns & aspects
             review_columns = filtered_df.columns.tolist()
             review_col_default_idx = review_columns.index(auto_review_col) if auto_review_col in review_columns else 0
-            review_col = st.selectbox("Select review column", options=review_columns, index=review_col_default_idx)
-
+            st.markdown(
+                "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Select review column</h3>",
+                unsafe_allow_html=True,
+            )
+            review_col = st.selectbox("", options=review_columns, index=review_col_default_idx)
+    
             nps_options = ["<Auto Detect>"] + review_columns
             nps_col_default_idx = nps_options.index(auto_nps_col) if auto_nps_col in nps_options else 0
-            nps_col = st.selectbox("Select NPS score column (0-10)", options=nps_options, index=nps_col_default_idx)
+            st.markdown(
+                "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Select NPS score column (0-10)</h3>",
+                unsafe_allow_html=True,
+            )
+            nps_col = st.selectbox("", options=nps_options, index=nps_col_default_idx)
             if nps_col == "<Auto Detect>":
                 nps_col = auto_nps_col if auto_nps_col else None
-
+    
             # Aspects selection
             COMMON_ASPECTS = ["Quality", "Delivery", "Price", "Customer Service", "Packaging", "Refund", "Order", "Website", "Value", "Communication"]
-            #st.markdown("### Select up to 10 aspects (optional)")
-            user_selected_aspects = st.multiselect("Choose common aspects", options=COMMON_ASPECTS)
-            user_custom_aspects = st.text_input("Add custom aspects (comma-separated)")
-
+            st.markdown(
+                "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Choose common aspects</h3>",
+                unsafe_allow_html=True,
+            )
+            user_selected_aspects = st.multiselect("", options=COMMON_ASPECTS)
+            st.markdown(
+                "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Add custom aspects (comma-separated)</h3>",
+                unsafe_allow_html=True,
+            )
+            user_custom_aspects = st.text_input("")
+    
             user_aspects_list = list(user_selected_aspects)
             if user_custom_aspects:
                 user_aspects_list += [a.strip() for a in user_custom_aspects.split(",") if a.strip()]
             if len(user_aspects_list) > 10:
                 st.warning("Maximum of 10 aspects allowed; extra ignored.")
             user_aspects = user_aspects_list[:10]
-
+    
             df = filtered_df.copy()
         else:
             if df_error:
                 st.error(df_error)
-
 
     def analyze_reviews(df, review_col, nps_col, user_aspects):
         lang = detect_language_of_reviews(df, review_col)
