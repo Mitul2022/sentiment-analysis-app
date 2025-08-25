@@ -413,85 +413,43 @@ if auth_controller():
         st.image(wc.to_array(), use_container_width=True)
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
-    def plot_top_ngrams(df, main_col=None, n=3, review_col=None, top_n=5):
-        """
-        Plot top n-grams from NEGATIVE reviews using raw frequency counts.
-        Focuses on top 5 aspects with highest negative mentions.
-        Supports n=3 (trigrams) and n=4 (four-grams).
-        """
-    
-        # Validate n-gram size
-        if n not in [3, 4]:
-            st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
-            return
-    
-        # Validate required columns
-        if "Aspect_Sentiment" not in df.columns or "Aspect" not in df.columns:
-            st.warning("Columns 'Aspect_Sentiment' and 'Aspect' are required.")
-            return
-    
-        # Determine text column
-        review_col = review_col or main_col
-        if review_col not in df.columns:
-            text_candidates = [c for c in df.columns if df[c].dtype == "object"]
-            if not text_candidates:
-                st.info("No valid text column found.")
-                return
-            review_col = text_candidates[0]
-    
-        # Filter negative reviews
-        neg_df = df[df["Aspect_Sentiment"] == "Negative"]
-        if neg_df.empty:
-            st.info("No negative reviews available.")
-            return
-    
-        # Focus on top 5 aspects with most negative mentions
-        top_aspects = neg_df["Aspect"].value_counts().head(5).index.tolist()
-        neg_df = neg_df[neg_df["Aspect"].isin(top_aspects)]
-    
-        # Collect texts
-        texts = neg_df[review_col].dropna().astype(str).str.lower().tolist()
-        if not texts:
-            st.info("No text available for negative reviews.")
-            return
-    
-        # CountVectorizer for raw frequency
-        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', min_df=2)
+
+    def plot_top_ngrams(df, main_col, n):
+        top_n = 5  # Fixed number of n-grams to display
+        # Map n to descriptive chart title
+        ngram_titles = {
+            2: "Bigrams (2-Word Phrases)",
+            3: "Trigrams (3-Word Phrases)",
+            4: "Four-Word Phrases (4-grams)"
+        }
+        title = ngram_titles.get(n, f"{n}-grams")
+        st.markdown(f"**Top {top_n} {title} in Reviews**")
+        texts = df[main_col].astype(str).tolist()
+        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=15)
         try:
             matrix = cv.fit_transform(texts)
-            sums = matrix.sum(axis=0).A1  # Raw counts
-            vocab = cv.get_feature_names_out()
-            freq = list(zip(vocab, sums))
+            sums = matrix.sum(axis=0)
+            freq = [(word, sums[0, idx]) for word, idx in cv.vocabulary_.items()]
             top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
-        except Exception as e:
-            st.info(f"Failed to compute n-grams: {e}")
-            return
-    
+        except Exception:
+            top_f = []
         if not top_f:
-            st.info("No meaningful n-grams found.")
+            st.info("No frequent phrases found.")
             return
-    
-        # Prepare plot
         labels, counts = zip(*top_f)
-        fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
+        fig, ax = plt.subplots(figsize=(8, max(4, 0.6*len(labels))))
         y_pos = np.arange(len(labels))
-        bars = ax.barh(y_pos, counts[::-1], color="#d62728")  # Red for negative
+        bars = ax.barh(y_pos, counts[::-1], color='#1f77b4')
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
         ax.set_xlabel("Frequency")
-        title = {3: "Trigrams", 4: "Four-Grams"}[n]
-        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews (Top 5 Aspects)")
-    
-        # Annotate bars with counts
+        ax.set_title(f"Top {len(labels)} {title}")
         for bar in bars:
-            ax.annotate(f"{int(bar.get_width())}",
-                        (bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2),
-                        va="center", fontsize=9, fontweight="bold")
-    
+            ax.annotate(f"{int(bar.get_width())}", (bar.get_width() + 0.2, bar.get_y() + bar.get_height()/2),
+                        va='center', fontsize=9, fontweight='bold')
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
-
 
     def plot_aspect_popularity(summary_df):
         st.markdown("**Most Discussed Aspects by Sentiment**")
@@ -605,29 +563,19 @@ if auth_controller():
         st.markdown("**Overall Sentiment Distribution (All Aspects)**")
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
-    
-        fig, ax = plt.subplots(figsize=(3.2, 1.75))  # Reduced chart size
-    
+
+        fig, ax = plt.subplots(figsize=(6, 4))
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
-            textprops={'fontsize': 10, 'fontweight': 'bold'}  # Lower label font size
+            textprops={'fontsize': 14, 'fontweight': 'bold'}
         )
-
-        # Explicitly decrease data label font size
-        for autotext in autotexts:
-            autotext.set_fontsize(9)              # Smaller percentage labels
-    
-        for text in texts:
-            text.set_fontsize(9)                  # Smaller legend labels
-    
         ax.set_aspect('equal')
-        ax.set_title("Overall Sentiment Distribution", fontsize=11, fontweight='bold')  # Smaller title font
+        ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
         st.pyplot(fig)
         plt.close(fig)
-
 
 
     # Main execution block
@@ -724,8 +672,9 @@ if auth_controller():
             plt.close(fig)
 
             # Continue other ngram plots
-            plot_top_ngrams(df_out, main_col=review_col_actual, n=3)
-            plot_top_ngrams(df_out, review_col=review_col_actual, n=4)
+            plot_top_ngrams(df, review_col_actual, 2)
+            plot_top_ngrams(df, review_col_actual, 3)
+            plot_top_ngrams(df, review_col_actual, 4)
 
             # Downloads
             col1, col2, col3 = st.columns([3, 3, 4])
@@ -866,4 +815,3 @@ if auth_controller():
     else:
         if uploaded_file and df_error:
             st.error(df_error)
-
