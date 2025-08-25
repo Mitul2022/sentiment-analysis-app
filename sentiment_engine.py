@@ -731,7 +731,7 @@ def build_recommendations_for_aspect(aspect, neg_reviews, max_recommendations=10
         # max_features None by default means no limit (captures all)
     )
 
-    X = vectorizer.fit_transform([reviews_blob])
+    X = vectorizer.fit_transform([r.lower() for r in neg_reviews if r.strip()])
     freq = [(word, X[0, idx]) for word, idx in vectorizer.vocabulary_.items()]
     freq_sorted = sorted(freq, key=lambda x: x[1], reverse=True)
 
