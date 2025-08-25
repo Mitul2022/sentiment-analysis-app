@@ -560,7 +560,7 @@ if auth_controller():
 
 
     def plot_overall_sentiment(df_out):
-        st.markdown("**Overall Sentiment Distribution (All Aspects)**")
+        #st.markdown("**Overall Sentiment Distribution (All Aspects)**")
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
 
