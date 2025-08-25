@@ -383,7 +383,7 @@ if auth_controller():
 
 
     def plot_review_length(df, main_col, figsize=(8, 4.5)):
-        st.markdown("**Review Length Distribution**")
+        st.markdown("<h3>Review Length Distribution</h3>", unsafe_allow_html=True)
         lengths = df[main_col].astype(str).str.len()
         lengths = lengths[lengths <= 500]
         fig, ax = plt.subplots(figsize=figsize)
@@ -424,7 +424,7 @@ if auth_controller():
             4: "Four-Word Phrases (4-grams)"
         }
         title = ngram_titles.get(n, f"{n}-grams")
-        st.markdown(f"**Top {top_n} {title} in Reviews**")
+        st.markdown("<h3>Top 5 Trigrams (3-Word Phrases) in Reviews</h3>", unsafe_allow_html=True)
         texts = df[main_col].astype(str).tolist()
         cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=15)
         try:
@@ -453,7 +453,7 @@ if auth_controller():
         plt.close(fig)
 
     def plot_aspect_popularity(summary_df):
-        st.markdown("**Most Discussed Aspects by Sentiment**")
+        st.markdown("<h3>Most Discussed Aspects by Sentiment</h3>", unsafe_allow_html=True)
         df_ = summary_df.head(TOP_N_ASPECTS)
         aspects = df_['Aspect']
         pos = df_['Positive']
@@ -481,7 +481,7 @@ if auth_controller():
         plt.close(fig)
 
     def plot_top_negative_aspects(summary_df):
-        st.markdown(f"**Most Discussed Negative Aspects by Sentiment**")
+        st.markdown("<h3>Most Discussed Negative Aspects by Sentiment</h3>", unsafe_allow_html=True)
         df_ = summary_df.sort_values(by='Negative', ascending=False).head(TOP_N_ASPECTS)
         fig, ax = plt.subplots(figsize=(8, 5))
         bars = ax.bar(df_['Aspect'], df_['Negative'], color='#d62728')
@@ -578,7 +578,7 @@ if auth_controller():
 
 
     def plot_overall_sentiment(df_out):
-        st.markdown("**Overall Sentiment Distribution (All Aspects)**")
+        st.markdown("<h3>Overall Sentiment Distribution (All Aspects)</h3>", unsafe_allow_html=True)
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
     
