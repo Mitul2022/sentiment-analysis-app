@@ -414,9 +414,9 @@ if auth_controller():
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
 
-    def plot_top_ngrams(df, main_col, n):
+    def plot_top_ngrams(df, review_col, n):
         """
-        Plot top n-grams from ALL NEGATIVE reviews in the dataset.
+        Plot top n-grams from ALL NEGATIVE reviews (deduplicated).
         Supports only n=3 (trigrams) and n=4 (four-grams).
         """
         if n not in [3, 4]:
@@ -431,47 +431,48 @@ if auth_controller():
             st.warning("Column 'Aspect_Sentiment' not found.")
             return
     
-        # Filter only negative reviews globally
+        # ✅ Filter only negative sentiment and deduplicate by review text
         negative_reviews = df[df["Aspect_Sentiment"] == "Negative"]
         if negative_reviews.empty:
-            st.info("No negative reviews available for n-gram analysis.")
+            st.info("No negative reviews available.")
             return
     
         # Validate review column
-        if main_col not in negative_reviews.columns:
+        if review_col not in negative_reviews.columns:
             text_candidates = [col for col in negative_reviews.columns if negative_reviews[col].dtype == "object"]
             if not text_candidates:
-                st.info("No valid text columns found for n-gram analysis.")
+                st.info("No valid text columns found.")
                 return
-            main_col = text_candidates[0]
+            review_col = text_candidates[0]
     
-        texts = negative_reviews[main_col].dropna().astype(str).tolist()
+        # ✅ Deduplicate reviews to avoid aspect-based repetition
+        texts = negative_reviews[review_col].dropna().astype(str).str.lower().drop_duplicates().tolist()
         if not texts:
-            st.info("No valid text found in negative reviews.")
+            st.info("No valid text found.")
             return
     
-        # For longer n-grams, keep stop words to preserve phrase meaning
-        stop_words = None if n == 4 else 'english'
-        cv = CountVectorizer(ngram_range=(n, n), stop_words=stop_words, max_features=200)
+        # ✅ Keep stopwords for n ≥ 3
+        stop_words = None
+        cv = CountVectorizer(ngram_range=(n, n), stop_words=stop_words, max_features=500)
     
         try:
             matrix = cv.fit_transform(texts)
             sums = matrix.sum(axis=0)
-            freq = [(word, sums[0, idx]) for word, idx in cv.vocabulary_.items()]
+            freq = [(word, int(sums[0, idx])) for word, idx in cv.vocabulary_.items()]
             top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
         except Exception:
             st.info("Failed to compute n-grams.")
             return
     
         if not top_f:
-            st.info("No frequent phrases found in negative reviews.")
+            st.info("No frequent phrases found.")
             return
     
-        # Show warning if all counts are 1 (data sparsity)
+        # ✅ Warning for sparse data
         if len(top_f) == top_n and all(freq == 1 for _, freq in top_f):
-            st.info("Note: All selected n-grams occur only once. This suggests limited data for longer phrases.")
+            st.info("Note: All selected n-grams occur only once. Data might be too sparse for meaningful 4-grams.")
     
-        # Plot horizontal bar chart
+        # ✅ Plot horizontal bar chart
         labels, counts = zip(*top_f)
         fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
         y_pos = np.arange(len(labels))
