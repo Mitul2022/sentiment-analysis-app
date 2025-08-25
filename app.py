@@ -416,7 +416,7 @@ if auth_controller():
 
     def plot_top_ngrams(df, main_col, n):
         if n not in [3, 4]:
-            return  # Only show clustered bar charts for trigrams and 4-grams
+            return  # Only show charts for trigrams and 4-grams
         
         top_n = 5
         ngram_titles = {
@@ -427,7 +427,7 @@ if auth_controller():
         st.markdown(f"**Top {top_n} {title} in Reviews**")
         
         texts = df[main_col].astype(str).tolist()
-        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=20)
+        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=50)
         try:
             matrix = cv.fit_transform(texts)
             feature_names = cv.get_feature_names_out()
@@ -442,43 +442,46 @@ if auth_controller():
     
         ngram_labels = [f[0] for f in top_f]
         
-        # Gather sentiment counts for each ngram
+        # Initialize sentiment count dict for each ngram: [positive, neutral, negative]
         sentiment_labels = ['Positive', 'Neutral', 'Negative']
         sentiment_counts = {ngram: [0, 0, 0] for ngram in ngram_labels}
-        for idx, row in df.iterrows():
-            text = str(row[main_col])
-            sent = row.get('Aspect_Sentiment', 'Neutral')  # Adjust column as needed
-            for ngram in ngram_labels:
-                if ngram in text:
-                    try:
-                        sidx = sentiment_labels.index(sent)
-                    except ValueError:
-                        sidx = 1  # Default to neutral if unknown
-                    sentiment_counts[ngram][sidx] += 1
     
-        # Prepare data for clustered bars
+        for idx, row in df.iterrows():
+            text = str(row[main_col]).lower()
+            sent = row.get('Aspect_Sentiment', 'Neutral')
+            if sent not in sentiment_labels:
+                sent = 'Neutral'
+            sent_idx = sentiment_labels.index(sent)
+            for ngram in ngram_labels:
+                if ngram.lower() in text:
+                    sentiment_counts[ngram][sent_idx] += 1
+    
         counts_matrix = np.array([sentiment_counts[ngram] for ngram in ngram_labels])
         totals = counts_matrix.sum(axis=1)
-        bar_width = 0.2
+        
+        bar_width = 0.25
         y_pos = np.arange(len(ngram_labels))
-        colors = ['#2ca02c', '#d3d3d3', '#d62728']
+        colors = ['#2ca02c', '#d3d3d3', '#d62728']  # green, grey, red
     
-        fig, ax = plt.subplots(figsize=(8, max(4, 0.7 * len(ngram_labels))))
-        # Plot clusters for Positive, Neutral, Negative
+        fig, ax = plt.subplots(figsize=(10, max(4, 0.8 * len(ngram_labels))))
         for i, sentiment in enumerate(sentiment_labels):
-            ax.barh(y_pos + bar_width*i, counts_matrix[:,i], bar_width, label=sentiment, color=colors[i])
-        # Put total at the end of the cluster
+            ax.barh(y_pos + bar_width*i, counts_matrix[:, i], bar_width, label=sentiment, color=colors[i])
+    
+        # Annotate totals on right side of each cluster
         for i in range(len(ngram_labels)):
             ax.annotate(
-                f"Total: {int(totals[i])}", 
-                (totals[i] + 0.5, y_pos[i]+bar_width),
-                va='center', fontsize=9, fontweight='bold'
+                f"Total: {int(totals[i])}",
+                (totals[i] + max(totals)*0.01, y_pos[i] + bar_width),
+                va='center',
+                fontsize=9,
+                fontweight='bold'
             )
+    
         ax.set_yticks(y_pos + bar_width)
         ax.set_yticklabels(ngram_labels, fontsize=11)
-        ax.set_xlabel("Frequency (Per Sentiment)")
-        ax.set_title(f"Top {len(ngram_labels)} {title}: Sentiment Breakdown")
-        ax.legend()
+        ax.set_xlabel("Mentions by Sentiment")
+        ax.set_title(f"Top {len(ngram_labels)} {title} - Sentiment Breakdown")
+        ax.legend(loc='upper right')
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
