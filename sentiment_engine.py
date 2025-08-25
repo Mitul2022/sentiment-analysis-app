@@ -622,18 +622,102 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
 
     reviews_blob = " ".join([str(r).lower() for r in neg_reviews if r])
     aspect_themes = {
-        "delivery":      ["late", "delay", "not on time", "missed", "slow", "lost", "no tracking"],
-        "quality":       ["wilted", "dead", "poor", "bad", "damaged", "broken", "dry", "not fresh"],
-        "order":         ["wrong item", "not received", "canceled", "didn't arrive", "missing", "duplicate", "error"],
-        "price":         ["expensive", "overpriced", "not worth", "cheap", "costly", "pricey", "bad value"],
-        "customer service": ["slow response", "unhelpful", "no reply", "bad support", "rude", "not resolved"],
-        "refund":        ["no refund", "didn't get refund", "delayed refund", "refused", "slow refund", "hard to get"],
-        "website":       ["hard to use", "confusing", "bug", "crash", "not working", "error"],
-        "value":         ["not worth", "poor value", "cheap", "overpriced", "not good value"],
-        "packaging":     ["damaged", "bad packaging", "broken box", "leaking", "messy"],
-        "communication": ["no update", "no communication", "late info", "not informed"],
+        "delivery": [
+            "late", "delay", "not on time", "missed", "slow", "lost", "no tracking",
+            "delayed", "delivery delay", "shipping delay", "arrived late", "waiting too long",
+            "never arrived", "did not deliver", "not delivered", "package stuck", "shipping issues",
+            "delivery problem", "failed delivery", "delivery took too long", "delayed shipment",
+            "shipping took forever", "late shipment", "parcel lost", "no shipping info",
+            "cannot track package", "tracking issues", "shipment delayed",
+            "delivery cancelled", "missed delivery window", "delayed dispatch", "lost in transit",
+            "package delayed", "delivery not received", "delivery unclear", "delivery mess-up",
+            "delayed courier", "delivery agent no-show", "delivery postponed", "delivery incomplete",
+            "shipping damaged", "package left wrong address", "delivery instructions ignored"
+        ],
+        "quality": [
+            "wilted", "dead", "poor", "bad", "damaged", "broken", "dry", "not fresh",
+            "spoiled", "stale", "rotten", "defective", "faulty", "substandard",
+            "low quality", "inferior quality", "crumbled", "cracked", "discolored",
+            "not as described", "broken parts", "damaged goods", "expired", "not working",
+            "malfunctioning", "cheaply made", "defective product", "poorly made",
+            "flawed", "scratched", "uneven", "dented", "moldy", "smelly", "contaminated",
+            "bad texture", "wrong color", "incorrect specifications", "broken seal",
+            "missing pieces", "faded", "worn out", "disassembled", "junk", "inferior materials",
+            "fragile", "poor craftsmanship"
+        ],
+        "order": [
+            "wrong item", "not received", "canceled", "didn't arrive", "missing", "duplicate", "error",
+            "incorrect item", "order error", "order never arrived", "missing items", "order incomplete",
+            "cancelled order", "wrong shipment", "did not get order", "lost order",
+            "received wrong product", "order mix-up", "confused order", "order delayed",
+            "delivery mix-up", "order processing error",
+            "order rejected", "order lost", "order voided", "not processed", "partial order",
+            "order stuck", "order never confirmed", "order failed", "wrong quantity",
+            "backordered", "double charge", "order duplication"
+        ],
+        "price": [
+            "expensive", "overpriced", "not worth", "cheap", "costly", "pricey", "bad value",
+            "too expensive", "price too high", "not value for money", "overcharging",
+            "rip off", "price gouging", "hidden cost", "extra charges", "not worth the price",
+            "expensive for quality", "unfair pricing", "price hike", "costly purchase",
+            "overbudget", "price mismatch", "wrong pricing", "price too steep",
+            "unexpected fees", "service charges too high", "price not justified", "expensive shipping"
+        ],
+        "customer service": [
+            "slow response", "unhelpful", "no reply", "bad support", "rude", "not resolved",
+            "ignored", "no assistance", "poor communication", "unprofessional", "disrespectful",
+            "no customer service", "bad experience", "no follow-up", "long wait time",
+            "didn't help", "lack of support", "not friendly", "unresponsive", "not satisfied",
+            "poor handling", "incompetent", "unavailable", "disorganized", "disinterested",
+            "did not answer", "no callback", "repeated transfers", "uncaring", "dismissive",
+            "no empathy", "inconsistent information", "did not understand problem"
+        ],
+        "refund": [
+            "no refund", "didn't get refund", "delayed refund", "refused", "slow refund", "hard to get",
+            "refund denied", "refund never processed", "waiting for refund", "refund issues",
+            "no reimbursement", "delayed reimbursement", "refund problem", "hard refund process",
+            "refused to refund", "partial refund", "refund policy unclear", "refund took long",
+            "refund rejected", "refund request ignored", "refund not honored", "refund not credited",
+            "refund confusing", "refund rules unfair", "refund failed", "refund paperwork complicated"
+        ],
+        "website": [
+            "hard to use", "confusing", "bug", "crash", "not working", "error",
+            "website down", "slow website", "page not loading", "website glitch", "checkout error",
+            "payment failed", "site crash", "website broken", "navigation difficult",
+            "website loading issues", "website unusable", "cannot complete order", "form errors",
+            "website bug", "technical problems", "site hangs",
+            "website freeze", "website slow response", "website not mobile friendly",
+            "website not intuitive", "browser incompatibility", "unable to login",
+            "password reset issues", "broken links", "website error message"
+        ],
+        "value": [
+            "not worth", "poor value", "cheap", "overpriced", "not good value",
+            "bad value", "waste of money", "poor return", "low value", "not cost effective",
+            "disappointing", "value mismatch", "expensive for what it offers",
+            "not worth the cost", "value for money lacking", "price to value ratio low",
+            "did not meet expectations", "underwhelming", "overhyped", "too costly",
+            "false advertising", "poor investment", "not beneficial", "not economical"
+        ],
+        "packaging": [
+            "damaged", "bad packaging", "broken box", "leaking", "messy",
+            "poor packaging", "crushed box", "torn wrapper", "broken seal", "package crushed",
+            "inadequate packaging", "opened package", "package ripped", "badly packed",
+            "leaking contents", "package dirty", "package wet", "fragile packaging",
+            "container broken", "insufficient padding", "package smashed", "taped poorly",
+            "package torn open", "label missing", "not secure", "packaging sloppy",
+            "package dented", "package exploded"
+        ],
+        "communication": [
+            "no update", "no communication", "late info", "not informed",
+            "lack of communication", "not notified", "missed messages", "no response",
+            "no follow-up", "poor communication", "communication failure", "no tracking updates",
+            "no order updates", "not contacted", "communication delayed", "no email response",
+            "no call back", "missed notifications", "unclear information", "confusing messages",
+            "inconsistent updates", "communication breakdown", "lack of transparency",
+            "no feedback", "ignored messages"
+        ],
     }
-
+    
     summary = collections.Counter()
     for key, complaint_phrases in aspect_themes.items():
         if key in aspect.lower():
