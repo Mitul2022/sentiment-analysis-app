@@ -563,19 +563,24 @@ if auth_controller():
         st.markdown("**Overall Sentiment Distribution (All Aspects)**")
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
-
-        fig, ax = plt.subplots(figsize=(2, 1.5))
+    
+        fig, ax = plt.subplots(figsize=(3, 2))
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
-            textprops={'fontsize': 8, 'fontweight': 'bold'}
+            textprops={'fontsize': 4, 'fontweight': 'bold'}  # Reduced 3x
         )
+    
+        # Reduce percentage text (autotexts) size separately
+        for autotext in autotexts:
+            autotext.set_fontsize(4)  # Also shrink percentage labels
+    
         ax.set_aspect('equal')
-        #ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
         st.pyplot(fig)
         plt.close(fig)
+
 
 
     # Main execution block
