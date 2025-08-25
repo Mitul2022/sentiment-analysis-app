@@ -675,7 +675,7 @@ if auth_controller():
             neg_df = summary_df.sort_values(by="Negative", ascending=False).head(TOP_N_ASPECTS)
             bars = ax.bar(neg_df["Aspect"], neg_df["Negative"], color="#d62728")
             ax.set_ylabel("Negative Mentions")
-            ax.set_title("Top Negative Aspects", fontsize=16, fontweight="bold")
+            #ax.set_title("Top Negative Aspects", fontsize=16, fontweight="bold")
             ax.tick_params(axis='x', rotation=25, labelsize=11)
 
             for bar in bars:
