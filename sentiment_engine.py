@@ -717,58 +717,51 @@ def create_pdf_report(
     pdf.add_page()
 
     pdf.section("EXECUTIVE SUMMARY & KEY INSIGHTS")
+    if processing_stats:
+        def safe_format(value):
+            if isinstance(value, (int, float)):
+                return f"{value:,}"
+            return str(value)
 
-    def safe_format(value):
-        if isinstance(value, (int, float)):
-            return f"{value:,}"
-        return str(value) if value is not None else "N/A"
+        uploaded_str = safe_format(processing_stats.get('uploaded', 'N/A'))
+        filtered_str = safe_format(processing_stats.get('filtered_out', 'N/A'))
+        analysed_str = safe_format(processing_stats.get('analysed', 'N/A'))
+        unique_str = safe_format(processing_stats.get('unique_aspects', 'N/A'))
 
-    # ✅ Pull and format stats safely
-    uploaded_str = safe_format(processing_stats.get('uploaded') if processing_stats else None)
-    filtered_str = safe_format(processing_stats.get('filtered_out') if processing_stats else None)
-    analysed_str = safe_format(processing_stats.get('analysed') if processing_stats else None)
-    unique_str = safe_format(processing_stats.get('unique_aspects') if processing_stats else None)
+        # ✅ Compute mentions with fallback
+        mentions = None
+        if processing_stats and 'aspect_mentions' in processing_stats:
+            mentions = processing_stats.get('aspect_mentions')
+        if mentions is None:  # fallback if missing
+            mentions = len(detail_df) if detail_df is not None else 0
+        mentions_str = safe_format(mentions)
 
-    # ✅ Fix for Total Mentions (fallback if missing)
-    mentions = None
-    if processing_stats and 'aspect_mentions' in processing_stats:
-        mentions = processing_stats.get('aspect_mentions')
-    if mentions is None:
-        mentions = len(detail_df) if detail_df is not None else 0
-    mentions_str = safe_format(mentions)
+        pdf.set_font(pdf.font_family, '', 11)
+        pdf.multi_cell(
+            0, 6,
+            f"Data processing summary:\n"
+            f"- Uploaded: {uploaded_str} reviews\n"
+            f"- Filtered out: {filtered_str} (blanks, undefined, N/A)\n"
+            f"- Analysed: {analysed_str} valid reviews\n"
+            f"- Unique aspects: {unique_str}\n"
+            f"- Total mentions: {mentions_str}\n"
+        )
+        pdf.ln(3)
 
-    # ✅ Data summary block
-    pdf.set_font(pdf.font_family, '', 11)
-    pdf.multi_cell(
-        0, 6,
-        f"Data processing summary:\n"
-        f"- Uploaded: {uploaded_str} reviews\n"
-        f"- Filtered out: {filtered_str} (blanks, undefined, N/A)\n"
-        f"- Analysed: {analysed_str} valid reviews\n"
-        f"- Unique aspects: {unique_str}\n"
-        f"- Total aspect mentions: {mentions_str}\n"
-    )
-    pdf.ln(3)
-
-    # ✅ Add top aspects insights
     if summary_df.empty:
         pdf.add_paragraph("No data to summarize.")
     else:
-        top_overall = summary_df.sort_values(by="Total Mentions", ascending=False).iloc[0]
-        top_positive = summary_df.sort_values(by="Positive", ascending=False).iloc[0]
-        top_negative = summary_df.sort_values(by="Negative", ascending=False).iloc[0]
+        top = summary_df.iloc[0]
+        pdf.add_paragraph(
+            f"Top mentioned aspect: {top['Aspect']} ({top['Total Mentions']} mentions)."
+        )
 
-        pdf.add_paragraph(f"Top overall mentioned aspect: {top_overall['Aspect']} ({top_overall['Total Mentions']} mentions).")
-        pdf.add_paragraph(f"Top positive aspect: {top_positive['Aspect']} ({top_positive['Positive']} positive mentions).")
-        pdf.add_paragraph(f"Top negative aspect: {top_negative['Aspect']} ({top_negative['Negative']} negative mentions).")
-
-    # ✅ KPI section
     pdf.section("KEY METRICS & KPI OVERVIEW")
     kpi_df = benchmark_kpis(summary_df, detail_df)
     pdf.add_table(kpi_df, title="Sentiment & NPS Score KPIs")
 
-    # ✅ Sentiment distribution
     pdf.section("SENTIMENT DISTRIBUTION BY TOP ASPECTS")
+    # Sort summary_df descending by total mentions for display
     sorted_summary = summary_df.copy()
     sorted_summary['Total'] = sorted_summary['Positive'] + sorted_summary['Neutral'] + sorted_summary['Negative']
     sorted_summary = sorted_summary.sort_values(by='Total', ascending=False)
@@ -806,7 +799,6 @@ def create_pdf_report(
     pdf.add_table(subset.head(10), fontsize=8, col_title_fontsize=8, col_widths=col_widths)
     """
 
-    # ✅ Negative reviews section
     pdf.section("RECENT NEGATIVE REVIEWS BY ASPECT")
     top_aspects = sorted_summary['Aspect'].head(10).tolist()
     neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, top_aspects, max_reviews=5)
@@ -820,7 +812,6 @@ def create_pdf_report(
         for i, rev in enumerate(reviews, 1):
             pdf.add_paragraph(f"{i}. {safe_quote(rev)}", size=9)
 
-    # ✅ Recommendations section
     pdf.section("ACTIONABLE RECOMMENDATIONS")
     if recommendations:
         for asp in top_aspects:
@@ -844,7 +835,7 @@ def create_pdf_report(
     elif isinstance(output, bytearray):
         output = bytes(output)
     return output
-    
+
 global_detail_df = pd.DataFrame()
 global_summary_df = pd.DataFrame()
 global_top_neg_reviews = {}
