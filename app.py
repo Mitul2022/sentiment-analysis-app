@@ -411,6 +411,7 @@ if auth_controller():
             st.info("Not enough text data for word cloud.")
             return
         wc = WordCloud(width=900, height=350, background_color='white', stopwords=STOPWORDS, max_words=120, colormap='Blues').generate(text_blob)
+        st.markdown("<h3>Word Cloud: Most Frequent Words (Excluding Stopwords)</h3>", unsafe_allow_html=True)
         st.image(wc.to_array(), use_container_width=True)
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
