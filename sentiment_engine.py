@@ -633,7 +633,18 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "delivery cancelled", "missed delivery window", "delayed dispatch", "lost in transit",
             "package delayed", "delivery not received", "delivery unclear", "delivery mess-up",
             "delayed courier", "delivery agent no-show", "delivery postponed", "delivery incomplete",
-            "shipping damaged", "package left wrong address", "delivery instructions ignored"
+            "shipping damaged", "package left wrong address", "delivery instructions ignored",
+            # --- New additions from reviews ---
+            "delivered after hours", "delivery after recipient left", "scheduled delivery not met",
+            "delivery 2 days late", "three days late", "full day late", "a few days late",
+            "delivery delayed due to weather", "delivery delayed by FedEx", "FedEx delays",
+            "countrywide delays", "delivery attempted but not left", "FedEx wouldn't leave",
+            "delivery went to wrong house", "delivery to hospital not handled", "delivery not completed when expected",
+            "delivery notification came after delivery", "delivery took too long", "delivery not on date promised",
+            "delivery not completed", "delivery by FedEx", "delivery agent didn't try", "delivery attempted multiple times",
+            "delivery not made", "delivery overdue", "delivery arrived early but in poor shape",
+            "flowers arrived 2 days early", "delivery not reliable", "unreliable delivery",
+            "delivery ruined (e.g., Mother's Day)", "delivery not time-sensitive", "delivery not tracked properly"
         ],
         "quality": [
             "wilted", "dead", "poor", "bad", "damaged", "broken", "dry", "not fresh",
@@ -644,7 +655,18 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "flawed", "scratched", "uneven", "dented", "moldy", "smelly", "contaminated",
             "bad texture", "wrong color", "incorrect specifications", "broken seal",
             "missing pieces", "faded", "worn out", "disassembled", "junk", "inferior materials",
-            "fragile", "poor craftsmanship"
+            "fragile", "poor craftsmanship",
+            # --- New additions from reviews ---
+            "flowers looked frozen", "frozen flowers", "bruised flowers", "petals falling off",
+            "roses small", "roses not good quality", "blooms underwhelming", "flowers not opened",
+            "only half looked good", "flowers didn't last", "lasted only 2 days", "dead in a few days",
+            "not lasted more than a few days", "died quickly", "wilted upon arrival", "wilted when opened",
+            "dark areas on roses", "signs of damage", "low temp damage", "flowers past prime",
+            "drooped in vase", "rotten when received", "made house smell", "mediocre bunch",
+            "not vibrant", "not fresh looking", "looked horrible", "flowers not in good condition",
+            "blossoms didn't open", "flowers not full", "not impressive", "underwhelming blooms",
+            "flowers not as expected", "not the same as picture", "too green filler", "wrong flowers delivered",
+            "not close to what was ordered", "not peonies", "had chrysanthemums instead", "not what I thought"
         ],
         "order": [
             "wrong item", "not received", "canceled", "didn't arrive", "missing", "duplicate", "error",
@@ -654,7 +676,16 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "delivery mix-up", "order processing error",
             "order rejected", "order lost", "order voided", "not processed", "partial order",
             "order stuck", "order never confirmed", "order failed", "wrong quantity",
-            "backordered", "double charge", "order duplication"
+            "backordered", "double charge", "order duplication",
+            # --- New additions from reviews ---
+            "order not delivered on due date", "order not delivered on day due", "order not fulfilled on time",
+            "order placed for Monday delivery but only Tuesday available",
+            "order showed up damaged", "order arrived damaged", "order not as pictured",
+            "order not what was expected", "order not what was shown", "order not accurate",
+            "order not completed", "order not confirmed", "order status inaccurate",
+            "tracking not updated", "shipment notification only", "no tracking info after shipment",
+            "order never shipped", "order not dispatched", "order not fulfilled",
+            "order not delivered by deadline", "order not delivered on birthday", "order ruined for occasion"
         ],
         "price": [
             "expensive", "overpriced", "not worth", "cheap", "costly", "pricey", "bad value",
@@ -662,7 +693,12 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "rip off", "price gouging", "hidden cost", "extra charges", "not worth the price",
             "expensive for quality", "unfair pricing", "price hike", "costly purchase",
             "overbudget", "price mismatch", "wrong pricing", "price too steep",
-            "unexpected fees", "service charges too high", "price not justified", "expensive shipping"
+            "unexpected fees", "service charges too high", "price not justified", "expensive shipping",
+            # --- New additions from reviews ---
+            "waste of money", "$50 too much to spend", "spent $60 on flowers never delivered",
+            "a little pricey", "pricey but good quality", "value for cost not met",
+            "store credit not worth it", "not worth the cost for late delivery", "paid for vase not received",
+            "charged for delivery not completed", "money not returned", "not worth the disappointment"
         ],
         "customer service": [
             "slow response", "unhelpful", "no reply", "bad support", "rude", "not resolved",
@@ -671,7 +707,16 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "didn't help", "lack of support", "not friendly", "unresponsive", "not satisfied",
             "poor handling", "incompetent", "unavailable", "disorganized", "disinterested",
             "did not answer", "no callback", "repeated transfers", "uncaring", "dismissive",
-            "no empathy", "inconsistent information", "did not understand problem"
+            "no empathy", "inconsistent information", "did not understand problem",
+            # --- New additions from reviews ---
+            "made light of issue", "blamed FedEx", "didn't own the issue", "great customer service",
+            "went above and beyond", "handled quickly with no hassle", "fast response",
+            "real answers not canned", "willing to fix issues", "good customer service via chat",
+            "replied but not helpful", "no help from customer service", "no follow-up after reply",
+            "required many emails", "reps not responsive", "customer service department great",
+            "appreciate how fast you respond", "customer service super", "helpful but too late",
+            "did not follow up", "no resolution offered", "offered store credit not refund",
+            "credit issued but not satisfactory", "store credit is BS", "customer service good but delivery bad"
         ],
         "refund": [
             "no refund", "didn't get refund", "delayed refund", "refused", "slow refund", "hard to get",
@@ -679,7 +724,14 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "no reimbursement", "delayed reimbursement", "refund problem", "hard refund process",
             "refused to refund", "partial refund", "refund policy unclear", "refund took long",
             "refund rejected", "refund request ignored", "refund not honored", "refund not credited",
-            "refund confusing", "refund rules unfair", "refund failed", "refund paperwork complicated"
+            "refund confusing", "refund rules unfair", "refund failed", "refund paperwork complicated",
+            # --- New additions from reviews ---
+            "want my money back not store credit", "credit issued but I want refund",
+            "store credit is total BS", "no refund issued", "still waiting for refund",
+            "credit not applied until I emailed", "had to send multiple emails for credit",
+            "no apology", "no compensation for delay", "only offered store credit",
+            "refund not provided", "money not returned", "refund not processed",
+            "refund not mentioned", "no mention of refund", "no refund despite failure"
         ],
         "website": [
             "hard to use", "confusing", "bug", "crash", "not working", "error",
@@ -689,7 +741,14 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "website bug", "technical problems", "site hangs",
             "website freeze", "website slow response", "website not mobile friendly",
             "website not intuitive", "browser incompatibility", "unable to login",
-            "password reset issues", "broken links", "website error message"
+            "password reset issues", "broken links", "website error message",
+            # --- New additions from reviews ---
+            "website surprisingly difficult to navigate", "had to contact customer service to get order right",
+            "order status not accurate", "tracking not updated", "website order status inaccurate",
+            "no tracking information until after delivery", "cannot track order",
+            "promotions not clear", "referral program faulty", "links not working",
+            "profile not updating", "promo credits not applied", "website misleading",
+            "website not transparent", "website caused confusion", "misleading communication from website"
         ],
         "value": [
             "not worth", "poor value", "cheap", "overpriced", "not good value",
@@ -697,7 +756,15 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "disappointing", "value mismatch", "expensive for what it offers",
             "not worth the cost", "value for money lacking", "price to value ratio low",
             "did not meet expectations", "underwhelming", "overhyped", "too costly",
-            "false advertising", "poor investment", "not beneficial", "not economical"
+            "false advertising", "poor investment", "not beneficial", "not economical",
+            # --- New additions from reviews ---
+            "ruined someone's day", "ruined delivery", "ruined Mother's Day",
+            "not worth the disappointment", "not worth the hassle", "not worth the price for poor delivery",
+            "great quality but poor delivery", "beautiful flowers but wasted due to delay",
+            "good product but bad experience", "would not use again", "first time and last time",
+            "like I'll use you again", "won't order again", "deterred from ordering online",
+            "not worth for time-sensitive events", "experience not worth the money",
+            "great when it works, but unreliable"
         ],
         "packaging": [
             "damaged", "bad packaging", "broken box", "leaking", "messy",
@@ -706,7 +773,13 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "leaking contents", "package dirty", "package wet", "fragile packaging",
             "container broken", "insufficient padding", "package smashed", "taped poorly",
             "package torn open", "label missing", "not secure", "packaging sloppy",
-            "package dented", "package exploded"
+            "package dented", "package exploded",
+            # --- New additions from reviews ---
+            "vase had a hole", "leaking vase", "vase broken during delivery", "vase not received",
+            "paid for vase not delivered", "package damaged", "box damaged", "flowers damaged in box",
+            "package showed up damaged", "fragile not marked", "not marked fragile",
+            "package crushed by FedEx", "flowers frozen in packaging", "no insulation",
+            "packaging not protective", "flowers not secured", "box not sturdy"
         ],
         "communication": [
             "no update", "no communication", "late info", "not informed",
@@ -715,10 +788,19 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "no order updates", "not contacted", "communication delayed", "no email response",
             "no call back", "missed notifications", "unclear information", "confusing messages",
             "inconsistent updates", "communication breakdown", "lack of transparency",
-            "no feedback", "ignored messages"
-        ],
+            "no feedback", "ignored messages",
+            # --- New additions from reviews ---
+            "no notification of delay", "chose to mislead me", "terrible communication",
+            "no communication about delay", "no email about delivery", "no update after order",
+            "not told delivery was late", "only one notification (delivery only)",
+            "no shipment notification", "delivery notification only", "no explanation",
+            "finally arrived with no notice", "no follow-up after email", "no transparency",
+            "no idea when it will be delivered", "unclear delivery time", "delivery window not met",
+            "no updates from company", "no proactive communication", "assumed delivery was on time",
+            "communication is key but missing", "no apology", "no acknowledgment of failure"
+        ]
     }
-    
+
     summary = collections.Counter()
     for key, complaint_phrases in aspect_themes.items():
         if key in aspect.lower():
