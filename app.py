@@ -572,7 +572,7 @@ if auth_controller():
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
             textprops={'fontsize': 8, 'fontweight': 'bold'},
-            radius=0.5
+            radius=0.7
         )
         ax.set_aspect('equal')
     
