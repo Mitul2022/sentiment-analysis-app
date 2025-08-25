@@ -184,7 +184,7 @@ if auth_controller():
                 # Let user select a single categorical column to filter by
                 selected_filter_column = st.selectbox(
                     "",
-                    options=["None"] + filtered_cat_cols,
+                    options=["Select All"] + filtered_cat_cols,
                     index=0,
                 )
     
