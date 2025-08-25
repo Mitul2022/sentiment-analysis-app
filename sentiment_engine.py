@@ -613,14 +613,13 @@ class PDFReport(FPDF):
         self.image(image_path, w=width if width else self.epw)
         os.remove(image_path)
         self.ln()
-        
-def build_recommendations_for_aspect(aspect, neg_reviews):
+
+
+def build_recommendations_for_aspect(aspect, neg_reviews, max_recommendations=10, min_phrase_count=1):
     import collections
+    from sklearn.feature_extraction.text import CountVectorizer
 
-    if not neg_reviews or all(not r.strip() for r in neg_reviews):
-        return [f"No actionable recommendations for '{aspect}' at this time."]
-
-    reviews_blob = " ".join([str(r).lower() for r in neg_reviews if r])
+    # Hardcoded fallback phrases per aspect (fill with your full expanded lists)
     aspect_themes = {
         "delivery": [
             "late", "delay", "not on time", "missed", "slow", "lost", "no tracking",
@@ -717,30 +716,61 @@ def build_recommendations_for_aspect(aspect, neg_reviews):
             "no feedback", "ignored messages"
         ],
     }
-    
-    summary = collections.Counter()
-    for key, complaint_phrases in aspect_themes.items():
-        if key in aspect.lower():
-            for phrase in complaint_phrases:
-                summary[phrase] += reviews_blob.count(phrase)
 
-    top_issues = [w for w, c in summary.most_common(5) if c > 0]
+    if not neg_reviews or all(not r.strip() for r in neg_reviews):
+        return [f"No actionable recommendations for '{aspect}' at this time."]
+
+    # Combine all negative reviews into one blob of text
+    reviews_blob = " ".join(str(r).lower() for r in neg_reviews if r.strip())
+
+    # Use CountVectorizer with no max_features to capture all features, 1-3grams, ignoring English stopwords
+    vectorizer = CountVectorizer(
+        ngram_range=(1, 3),
+        stop_words='english',
+        min_df=2  # Occur in at least 2 places to reduce noise, adjustable
+        # max_features None by default means no limit (captures all)
+    )
+
+    X = vectorizer.fit_transform([reviews_blob])
+    freq = [(word, X[0, idx]) for word, idx in vectorizer.vocabulary_.items()]
+    freq_sorted = sorted(freq, key=lambda x: x[1], reverse=True)
+
+    aspect_lower = aspect.lower()
+    hardcoded_phrases = aspect_themes.get(aspect_lower, [])
+
+    # Create a set of words from hardcoded phrases for filtering relevant dynamic phrases
+    hardcoded_keywords = set()
+    for phrase in hardcoded_phrases:
+        hardcoded_keywords.update(phrase.split())
+
+    filtered_phrases = []
+    for phrase, count in freq_sorted:
+        if count < min_phrase_count:
+            continue
+        phrase_words = set(phrase.split())
+        # Keep phrase if it shares any word with known keywords or contains the aspect name
+        if phrase_words & hardcoded_keywords or aspect_lower in phrase:
+            filtered_phrases.append((phrase, count))
+            if len(filtered_phrases) >= max_recommendations:
+                break
 
     recommendations = []
-    if top_issues:
-        aspect_nice = aspect.title()
-        for issue in top_issues:
-            recommendations.append(
-                f"Address '{issue}' issues in {aspect_nice}."
-            )
-        recommendations.insert(0, f"{aspect_nice}: Prioritize fixing these top issues to increase satisfaction and reduce negative feedback")
+    if filtered_phrases:
+        recommendations.append(f"{aspect.title()}: Prioritize fixing these top issues to increase satisfaction and reduce negative feedback.")
+        for phrase, _ in filtered_phrases:
+            recommendations.append(f"Address '{phrase}' issues in {aspect.title()}.")
     else:
-        recommendations.append(
-                               f"No actionable recommendations for '{aspect}' at this time.")
+        # Fallback to hardcoded phrases if no dynamic matching found
+        if hardcoded_phrases:
+            recommendations.append(f"No clear dynamic issues found for '{aspect}'. Using general guidance.")
+            recommendations.append(f"{aspect.title()}: Prioritize fixing common issues to increase satisfaction.")
+            for phrase in hardcoded_phrases[:max_recommendations-2]:
+                recommendations.append(f"Address '{phrase}' issues in {aspect.title()}.")
+        else:
+            recommendations.append(f"No actionable recommendations for '{aspect}' at this time.")
 
-    return recommendations[:10]
-
-
+    return recommendations[:max_recommendations]
+    
 def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
     def normalize(text):
         text = re.sub(r'page\s*\d+', '', text, flags=re.I)
