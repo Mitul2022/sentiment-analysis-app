@@ -560,22 +560,32 @@ if auth_controller():
 
 
     def plot_overall_sentiment(df_out):
-        #st.markdown("**Overall Sentiment Distribution (All Aspects)**")
+        st.markdown("**Overall Sentiment Distribution (All Aspects)**")
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
-
-        fig, ax = plt.subplots(figsize=(4, 2.5))
+    
+        fig, ax = plt.subplots(figsize=(3.2, 1.75))  # Reduced chart size
+    
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
-            textprops={'fontsize': 14, 'fontweight': 'bold'}
+            textprops={'fontsize': 10, 'fontweight': 'bold'}  # Lower label font size
         )
+
+        # Explicitly decrease data label font size
+        for autotext in autotexts:
+            autotext.set_fontsize(9)              # Smaller percentage labels
+    
+        for text in texts:
+            text.set_fontsize(9)                  # Smaller legend labels
+    
         ax.set_aspect('equal')
-        ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
+        ax.set_title("Overall Sentiment Distribution", fontsize=11, fontweight='bold')  # Smaller title font
         st.pyplot(fig)
         plt.close(fig)
+
 
 
     # Main execution block
