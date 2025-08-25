@@ -565,7 +565,7 @@ if auth_controller():
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
 
-        fig, ax = plt.subplots(figsize=(6, 4))
+        fig, ax = plt.subplots(figsize=(4, 4))
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
