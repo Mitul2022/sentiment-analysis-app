@@ -414,42 +414,35 @@ if auth_controller():
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
 
-    def plot_top_negative_ngrams(df, aspect_col, text_col, sentiment_col, summary_df, n=3, top_n=5):
+    def plot_top_ngrams(df, main_col, n):
         """
-        Plot top n-grams (trigrams or four-grams) from negative reviews
-        for the top 5 aspects with the highest negative mentions.
-    
-        Parameters:
-        - df: review-level DataFrame
-        - aspect_col: column containing aspect names
-        - text_col: column containing review text
-        - sentiment_col: column containing sentiment labels
-        - summary_df: aspect-level summary DataFrame
-        - n: n-gram size (3 or 4)
-        - top_n: number of n-grams to display
+        Plot top n-grams from NEGATIVE reviews only.
+        Supports only n=3 (trigrams) and n=4 (four-grams).
         """
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
     
-        # Get top 5 aspects by negative mentions
-        top_negative_aspects = summary_df.sort_values(by='Negative', ascending=False).head(5)['Aspect'].tolist()
-        filtered_df = df[(df[aspect_col].isin(top_negative_aspects)) & (df[sentiment_col] == "Negative")]
-    
-        if filtered_df.empty:
-            st.info("No negative reviews found for top negative aspects.")
-            return
-    
+        top_n = 5  # Fixed number of n-grams to display
         ngram_titles = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}
         title = ngram_titles[n]
-        st.markdown(f"### Top {top_n} {title} in Negative Reviews (Top 5 Negative Aspects)")
     
-        # Combine text from all filtered reviews
-        texts = filtered_df[text_col].dropna().astype(str).tolist()
-        if not texts:
-            st.info("No valid review text available.")
+        # Filter only negative sentiment reviews
+        if "Aspect_Sentiment" not in df.columns:
+            st.warning("Sentiment column 'Aspect_Sentiment' not found in data.")
             return
     
+        negative_reviews = df[df["Aspect_Sentiment"] == "Negative"]
+        if negative_reviews.empty:
+            st.info("No negative reviews available for n-gram analysis.")
+            return
+    
+        texts = negative_reviews[main_col].dropna().astype(str).tolist()
+        if not texts:
+            st.info("No valid text found in negative reviews.")
+            return
+    
+        # Generate n-grams
         cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=50)
         try:
             matrix = cv.fit_transform(texts)
@@ -457,11 +450,10 @@ if auth_controller():
             freq = [(word, sums[0, idx]) for word, idx in cv.vocabulary_.items()]
             top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
         except Exception:
-            st.info("Failed to compute n-grams.")
-            return
+            top_f = []
     
         if not top_f:
-            st.info("No frequent phrases found.")
+            st.info("No frequent phrases found in negative reviews.")
             return
     
         # Plot horizontal bar chart
@@ -472,9 +464,8 @@ if auth_controller():
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
         ax.set_xlabel("Frequency")
-        ax.set_title(f"Top {len(labels)} {title} (Negative Sentiment)")
+        ax.set_title(f"Top {len(labels)} {title} in Negative Reviews")
     
-        # Annotate bars with values
         for bar in bars:
             ax.annotate(
                 f"{int(bar.get_width())}",
@@ -720,12 +711,8 @@ if auth_controller():
 
             # Continue other ngram plots
             # For trigrams
-            plot_top_negative_ngrams(df_out, aspect_col="Aspect", text_col="Review", sentiment_col="Aspect_Sentiment", summary_df=summary_df, n=3, top_n=5)
-            
-            # For four-grams
-            plot_top_negative_ngrams(df_out, aspect_col="Aspect", text_col="Review", sentiment_col="Aspect_Sentiment", summary_df=summary_df, n=4, top_n=5)
-
-
+            plot_top_ngrams(df_out, review_col_actual, 3)
+            plot_top_ngrams(df_out, review_col_actual, 4)
 
             # Downloads
             col1, col2, col3 = st.columns([3, 3, 4])
