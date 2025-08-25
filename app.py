@@ -574,7 +574,7 @@ if auth_controller():
             textprops={'fontsize': 14, 'fontweight': 'bold'}
         )
         ax.set_aspect('equal')
-        ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
+        #ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
         st.pyplot(fig)
         plt.close(fig)
 
@@ -673,7 +673,7 @@ if auth_controller():
             plt.close(fig)
 
             # Continue other ngram plots
-            plot_top_ngrams(df, review_col_actual, 2)
+            #plot_top_ngrams(df, review_col_actual, 2)
             plot_top_ngrams(df, review_col_actual, 3)
             plot_top_ngrams(df, review_col_actual, 4)
 
