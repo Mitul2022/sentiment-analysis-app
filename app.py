@@ -564,8 +564,8 @@ if auth_controller():
         st.markdown("**Overall Sentiment Distribution (All Aspects)**")
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
-
-        fig, ax = plt.subplots(figsize=(4, 4))
+    
+        fig, ax = plt.subplots(figsize=(4, 4), dpi=200)  # Square, high DPI
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
@@ -575,10 +575,14 @@ if auth_controller():
             radius=0.5
         )
         ax.set_aspect('equal')
-        #ax.set_title("Overall Sentiment Distribution", fontsize=14, fontweight='bold')
-        st.pyplot(fig)
+    
+        plt.tight_layout()  # Adjust layout for minimal padding
+    
+        # Streamlit render with cropped margins
+        buf = BytesIO()
+        plt.savefig(buf, format="png", bbox_inches='tight', pad_inches=0)  # ✅ removes extra whitespace
+        st.image(buf)
         plt.close(fig)
-
 
     # Main execution block
 
