@@ -501,7 +501,7 @@ if auth_controller():
         plt.close()
 
     def show_eda_metrics(df, summary_df, review_col):
-        st.markdown("<h3>🔍 Data Summary & Analytics</h3>", unsafe_allow_html=True)
+        st.markdown("<h3>Data Summary & Analytics</h3>", unsafe_allow_html=True)
     
         analysed_count = len(df)
     
