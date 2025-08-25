@@ -12,7 +12,7 @@ if auth_controller():
     import matplotlib.pyplot as plt
     from io import BytesIO
     from collections import Counter
-    from sklearn.feature_extraction.text import CountVectorizer
+    from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
     import numpy as np
 
     # Try import wordcloud, or skip feature if not available
