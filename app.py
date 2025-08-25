@@ -468,7 +468,7 @@ if auth_controller():
             4: "Four-Word Phrases (4-grams)"
         }
         title = ngram_titles.get(n, f"{n}-grams")
-        st.markdown("<h3>Top 5 Trigrams (3-Word Phrases) in Reviews</h3>", unsafe_allow_html=True)
+        st.markdown(f"<h3>Top 5 {title} in Reviews</h3>", unsafe_allow_html=True)
         texts = df[main_col].astype(str).tolist()
         cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=15)
         try:
