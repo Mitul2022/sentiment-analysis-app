@@ -391,7 +391,7 @@ if auth_controller():
         ax.set_xlim(0, 500)
         ax.set_xlabel("Review Length (characters)")
         ax.set_ylabel("Number of Reviews")
-        ax.set_title("Review Length Distribution", fontsize=14, fontweight='bold', pad=10)
+        #ax.set_title("Review Length Distribution", fontsize=14, fontweight='bold', pad=10)
 
         # Add bar labels
         for count, patch in zip(counts, patches):
@@ -444,7 +444,7 @@ if auth_controller():
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
         ax.set_xlabel("Frequency")
-        ax.set_title(f"Top {len(labels)} {title}")
+        #ax.set_title(f"Top {len(labels)} {title}")
         for bar in bars:
             ax.annotate(f"{int(bar.get_width())}", (bar.get_width() + 0.2, bar.get_y() + bar.get_height()/2),
                         va='center', fontsize=9, fontweight='bold')
@@ -468,7 +468,7 @@ if auth_controller():
         ax.set_xticks(x)
         ax.set_xticklabels(aspects, rotation=25, ha='right', fontsize=11)
         ax.set_ylabel("Mentions")
-        ax.set_title("Most Discussed Aspects by Sentiment")
+        #ax.set_title("Most Discussed Aspects by Sentiment")
         ax.legend()
         for bars in [bars_pos, bars_neu, bars_neg]:
             for bar in bars:
@@ -486,7 +486,7 @@ if auth_controller():
         fig, ax = plt.subplots(figsize=(8, 5))
         bars = ax.bar(df_['Aspect'], df_['Negative'], color='#d62728')
         ax.set_ylabel("Negative Mentions")
-        ax.set_title(f"Most Discussed Negative Aspects by Sentiment")
+        #ax.set_title(f"Most Discussed Negative Aspects by Sentiment")
         ax.tick_params(axis='x', rotation=25)
         ax.tick_params(axis='x', labelsize=11)
 
