@@ -414,51 +414,61 @@ if auth_controller():
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
 
-    def plot_top_ngrams(df, review_col, n):
+    def plot_top_ngrams(df, main_col=None, n=3, review_col=None, top_n=5):
         """
         Plot top n-grams from ALL NEGATIVE reviews (deduplicated).
-        Supports only n=3 (trigrams) and n=4 (four-grams).
+        Supports n=3 (trigrams) and n=4 (four-grams).
+        Accepts either `main_col=` or `review_col=` as the text column name.
         """
+        # --- guardrails ---
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
-    
-        top_n = 5
-        ngram_titles = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}
-        title = ngram_titles[n]
-    
         if "Aspect_Sentiment" not in df.columns:
             st.warning("Column 'Aspect_Sentiment' not found.")
             return
     
-        # ✅ Filter only negative sentiment and deduplicate by review text
-        negative_reviews = df[df["Aspect_Sentiment"] == "Negative"]
-        if negative_reviews.empty:
+        # unify arg names
+        if review_col is None:
+            review_col = main_col
+    
+        # filter negatives
+        neg = df[df["Aspect_Sentiment"] == "Negative"]
+        if neg.empty:
             st.info("No negative reviews available.")
             return
     
-        # Validate review column
-        if review_col not in negative_reviews.columns:
-            text_candidates = [col for col in negative_reviews.columns if negative_reviews[col].dtype == "object"]
+        # pick a usable text column
+        if review_col not in neg.columns or review_col is None:
+            # try to find a text-like column
+            text_candidates = [c for c in neg.columns if neg[c].dtype == "object"]
             if not text_candidates:
-                st.info("No valid text columns found.")
+                st.info("No valid text columns found for n-gram analysis.")
                 return
             review_col = text_candidates[0]
     
-        # ✅ Deduplicate reviews to avoid aspect-based repetition
-        texts = negative_reviews[review_col].dropna().astype(str).str.lower().drop_duplicates().tolist()
+        # collect & clean texts; deduplicate to avoid aspect-repeat inflation
+        texts = (
+            neg[review_col]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .str.lower()
+            .drop_duplicates()
+            .tolist()
+        )
         if not texts:
-            st.info("No valid text found.")
+            st.info("No valid text found in negative reviews.")
             return
     
-        # ✅ Keep stopwords for n ≥ 3
+        # keep stopwords for longer phrases to preserve meaning
         stop_words = None
         cv = CountVectorizer(ngram_range=(n, n), stop_words=stop_words, max_features=500)
     
         try:
             matrix = cv.fit_transform(texts)
             sums = matrix.sum(axis=0)
-            freq = [(word, int(sums[0, idx])) for word, idx in cv.vocabulary_.items()]
+            freq = [(term, int(sums[0, idx])) for term, idx in cv.vocabulary_.items()]
             top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
         except Exception:
             st.info("Failed to compute n-grams.")
@@ -468,24 +478,27 @@ if auth_controller():
             st.info("No frequent phrases found.")
             return
     
-        # ✅ Warning for sparse data
-        if len(top_f) == top_n and all(freq == 1 for _, freq in top_f):
-            st.info("Note: All selected n-grams occur only once. Data might be too sparse for meaningful 4-grams.")
+        # sparse-data hint
+        if len(top_f) == top_n and all(c == 1 for _, c in top_f):
+            st.info("Note: All selected n-grams occur only once. Data may be too sparse for meaningful long n-grams.")
     
-        # ✅ Plot horizontal bar chart
+        # plot
         labels, counts = zip(*top_f)
         fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
         y_pos = np.arange(len(labels))
-        bars = ax.barh(y_pos, counts[::-1], color="#d62728")  # Red for negative
+        bars = ax.barh(y_pos, counts[::-1], color="#d62728")  # red for negative
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
         ax.set_xlabel("Frequency")
+        title = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}[n]
         ax.set_title(f"Top {len(labels)} {title} in All Negative Reviews")
     
         for bar in bars:
-            ax.annotate(f"{int(bar.get_width())}",
-                        (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
-                        va='center', fontsize=9, fontweight='bold')
+            ax.annotate(
+                f"{int(bar.get_width())}",
+                (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
+                va="center", fontsize=9, fontweight="bold"
+            )
     
         plt.tight_layout()
         st.pyplot(fig)
@@ -722,12 +735,8 @@ if auth_controller():
             plt.close(fig)
 
             # Continue other ngram plots
-            # For trigrams
-            # For trigrams (from ALL negative reviews)
             plot_top_ngrams(df_out, main_col=review_col_actual, n=3)
-            
-            # For four-grams (from ALL negative reviews)
-            plot_top_ngrams(df_out, main_col=review_col_actual, n=4)
+            plot_top_ngrams(df_out, review_col=review_col_actual, n=4)
 
             # Downloads
             col1, col2, col3 = st.columns([3, 3, 4])
