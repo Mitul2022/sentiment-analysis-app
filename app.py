@@ -564,14 +564,15 @@ if auth_controller():
         sentiments = df_out['Aspect_Sentiment'].value_counts()
         sentiments = sentiments.reindex(["Positive", "Neutral", "Negative"], fill_value=0)
     
-        fig, ax = plt.subplots(figsize=(3, 2))
+        # High DPI for sharper rendering
+        fig, ax = plt.subplots(figsize=(3, 2), dpi=200)  # ↑ DPI increased to 200
         wedges, texts, autotexts = ax.pie(
             sentiments,
             labels=sentiments.index,
             autopct='%1.1f%%',
             colors=["#2ca02c", "#d3d3d3", "#d62728"],
             textprops={'fontsize': 4, 'fontweight': 'bold'},
-            radius=0.6  # ↓ Reduce radius (default is 1.0)
+            radius=0.6  # ↓ Reduce radius
         )
     
         for autotext in autotexts:
