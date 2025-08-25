@@ -414,44 +414,82 @@ if auth_controller():
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
 
-    def plot_top_ngrams(df, main_col, n):
-        top_n = 5  # Fixed number of n-grams to display
-        # Map n to descriptive chart title
-        ngram_titles = {
-            2: "Bigrams (2-Word Phrases)",
-            3: "Trigrams (3-Word Phrases)",
-            4: "Four-Word Phrases (4-grams)"
-        }
-        title = ngram_titles.get(n, f"{n}-grams")
-        st.markdown(f"**Top {top_n} {title} in Reviews**")
-        texts = df[main_col].astype(str).tolist()
-        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=15)
-        try:
-            matrix = cv.fit_transform(texts)
-            sums = matrix.sum(axis=0)
-            freq = [(word, sums[0, idx]) for word, idx in cv.vocabulary_.items()]
-            top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
-        except Exception:
-            top_f = []
-        if not top_f:
-            st.info("No frequent phrases found.")
+    def plot_top_ngrams(df, text_col, sentiment_col, n=3, top_n=5):
+        """
+        Plot clustered bar chart of top n-grams grouped by sentiment (Positive, Neutral, Negative).
+        Only supports n=3 (trigrams) or n=4 (four-grams).
+        """
+        if n not in [3, 4]:
+            st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
-        labels, counts = zip(*top_f)
-        fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
-        y_pos = np.arange(len(labels))
-        bars = ax.barh(y_pos, counts[::-1], color='#1f77b4')
-        ax.set_yticks(y_pos)
-        ax.set_yticklabels(labels[::-1], fontsize=11)
-        ax.set_xlabel("Frequency")
-        ax.set_title(f"Top {len(labels)} {title}")
-        for bar in bars:
-            ax.annotate(
-                f"{int(bar.get_width())}",
-                (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
-                va='center',
-                fontsize=9,
-                fontweight='bold'
-            )
+    
+        top_n = max(1, top_n)
+        ngram_titles = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}
+        title = ngram_titles[n]
+    
+        st.markdown(f"### Top {top_n} {title} by Sentiment")
+    
+        sentiments = ["Positive", "Neutral", "Negative"]
+        sentiments_present = [s for s in sentiments if s in df[sentiment_col].unique()]
+    
+        if not sentiments_present:
+            st.info("No sentiment data found to plot clustered n-grams.")
+            return
+    
+        cv = CountVectorizer(ngram_range=(n, n), stop_words='english')
+    
+        # Frequency dictionary for each sentiment
+        freq_dict = {}
+        for s in sentiments_present:
+            texts = df[df[sentiment_col] == s][text_col].dropna().astype(str).tolist()
+            if not texts:
+                continue
+            try:
+                matrix = cv.fit_transform(texts)
+                sums = matrix.sum(axis=0)
+                freq = {word: sums[0, idx] for word, idx in cv.vocabulary_.items()}
+                top_f = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:top_n]
+                freq_dict[s] = dict(top_f)
+            except Exception:
+                freq_dict[s] = {}
+    
+        if not freq_dict:
+            st.info("No frequent phrases found for any sentiment.")
+            return
+    
+        # Combine all top n-grams across sentiments
+        all_ngrams = set()
+        for d in freq_dict.values():
+            all_ngrams.update(d.keys())
+        all_ngrams = list(all_ngrams)
+    
+        # Prepare data for grouped bars
+        data = []
+        for s in sentiments_present:
+            counts = [freq_dict.get(s, {}).get(g, 0) for g in all_ngrams]
+            data.append(counts)
+    
+        x = np.arange(len(all_ngrams))
+        width = 0.25
+        fig, ax = plt.subplots(figsize=(10, 6))
+        colors = ['#2ca02c', '#ffbb78', '#d62728']  # Positive, Neutral, Negative
+    
+        for i, s in enumerate(sentiments_present):
+            ax.bar(x + i * width, data[i], width, label=s, color=colors[i % len(colors)])
+    
+        ax.set_xticks(x + width * (len(sentiments_present) - 1) / 2)
+        ax.set_xticklabels(all_ngrams, rotation=30, ha='right', fontsize=11)
+        ax.set_ylabel("Frequency")
+        ax.set_title(f"Top {top_n} {title} by Sentiment")
+        ax.legend()
+    
+        # Add annotations
+        for i, s in enumerate(sentiments_present):
+            for j, val in enumerate(data[i]):
+                if val > 0:
+                    ax.text(x[j] + i * width, val + 0.2, str(val),
+                            ha='center', va='bottom', fontsize=9, fontweight='bold')
+    
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
@@ -687,9 +725,12 @@ if auth_controller():
             plt.close(fig)
 
             # Continue other ngram plots
-            plot_top_ngrams(df, review_col_actual, 2)
-            plot_top_ngrams(df, review_col_actual, 3)
-            plot_top_ngrams(df, review_col_actual, 4)
+            # For trigrams
+            plot_top_ngrams(df_out, text_col="Review", sentiment_col="Aspect_Sentiment", n=3, top_n=5)
+            
+            # For four-grams
+            plot_top_ngrams(df_out, text_col="Review", sentiment_col="Aspect_Sentiment", n=4, top_n=5)
+
 
             # Downloads
             col1, col2, col3 = st.columns([3, 3, 4])
