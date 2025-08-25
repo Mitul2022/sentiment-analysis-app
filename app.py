@@ -416,8 +416,8 @@ if auth_controller():
 
     def plot_top_ngrams(df, text_col, sentiment_col, n=3, top_n=5):
         """
-        Plot clustered bar chart of top n-grams grouped by sentiment (Positive, Neutral, Negative).
-        Only supports n=3 (trigrams) or n=4 (four-grams).
+        Plot stacked bar chart of top n-grams grouped by sentiment (Positive, Neutral, Negative).
+        Supports only n=3 (trigrams) or n=4 (four-grams).
         """
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
@@ -427,18 +427,18 @@ if auth_controller():
         ngram_titles = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}
         title = ngram_titles[n]
     
-        st.markdown(f"### Top {top_n} {title} by Sentiment")
+        st.markdown(f"### Top {top_n} {title} by Sentiment (Stacked Bar)")
     
         sentiments = ["Positive", "Neutral", "Negative"]
         sentiments_present = [s for s in sentiments if s in df[sentiment_col].unique()]
     
         if not sentiments_present:
-            st.info("No sentiment data found to plot clustered n-grams.")
+            st.info("No sentiment data found to plot stacked n-grams.")
             return
     
         cv = CountVectorizer(ngram_range=(n, n), stop_words='english')
     
-        # Frequency dictionary for each sentiment
+        # Calculate n-gram frequency per sentiment
         freq_dict = {}
         for s in sentiments_present:
             texts = df[df[sentiment_col] == s][text_col].dropna().astype(str).tolist()
@@ -457,42 +457,40 @@ if auth_controller():
             st.info("No frequent phrases found for any sentiment.")
             return
     
-        # Combine all top n-grams across sentiments
+        # Combine top n-grams across sentiments
         all_ngrams = set()
         for d in freq_dict.values():
             all_ngrams.update(d.keys())
         all_ngrams = list(all_ngrams)
     
-        # Prepare data for grouped bars
-        data = []
-        for s in sentiments_present:
-            counts = [freq_dict.get(s, {}).get(g, 0) for g in all_ngrams]
-            data.append(counts)
+        # Prepare data for stacked bar
+        data = {s: [freq_dict.get(s, {}).get(g, 0) for g in all_ngrams] for s in sentiments_present}
+        indices = np.arange(len(all_ngrams))
     
-        x = np.arange(len(all_ngrams))
-        width = 0.25
+        # Plot stacked bar
         fig, ax = plt.subplots(figsize=(10, 6))
-        colors = ['#2ca02c', '#ffbb78', '#d62728']  # Positive, Neutral, Negative
+        bottom_vals = np.zeros(len(all_ngrams))
+        colors = {'Positive': '#2ca02c', 'Neutral': '#ffbb78', 'Negative': '#d62728'}
     
-        for i, s in enumerate(sentiments_present):
-            ax.bar(x + i * width, data[i], width, label=s, color=colors[i % len(colors)])
+        for s in sentiments_present:
+            ax.bar(all_ngrams, data[s], bottom=bottom_vals, label=s, color=colors.get(s, '#1f77b4'))
+            bottom_vals += np.array(data[s])
     
-        ax.set_xticks(x + width * (len(sentiments_present) - 1) / 2)
-        ax.set_xticklabels(all_ngrams, rotation=30, ha='right', fontsize=11)
         ax.set_ylabel("Frequency")
-        ax.set_title(f"Top {top_n} {title} by Sentiment")
+        ax.set_title(f"Top {top_n} {title} by Sentiment (Stacked)")
+        ax.set_xticks(indices)
+        ax.set_xticklabels(all_ngrams, rotation=30, ha='right', fontsize=11)
         ax.legend()
     
-        # Add annotations
-        for i, s in enumerate(sentiments_present):
-            for j, val in enumerate(data[i]):
-                if val > 0:
-                    ax.text(x[j] + i * width, val + 0.2, str(val),
-                            ha='center', va='bottom', fontsize=9, fontweight='bold')
+        # Add annotations for total height
+        for i, total in enumerate(bottom_vals):
+            if total > 0:
+                ax.text(i, total + 0.3, str(int(total)), ha='center', va='bottom', fontsize=9, fontweight='bold')
     
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
+
 
     def plot_aspect_popularity(summary_df):
         st.markdown("**Most Discussed Aspects by Sentiment**")
