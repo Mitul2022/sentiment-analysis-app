@@ -329,7 +329,7 @@ if auth_controller():
     # Visualization Helpers
 
     def plot_nps_gauge(df):
-        st.markdown("**Net Promoter Score (NPS) Analysis**")
+        st.markdown("<h3>Net Promoter Score (NPS) Analysis</h3>", unsafe_allow_html=True)
         nps_colname = None
         for c in df.columns:
             if c.lower() in ('nps_score', 'nps', 'score', 'rating', 'net promoter score'):
