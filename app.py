@@ -12,7 +12,7 @@ if auth_controller():
     import matplotlib.pyplot as plt
     from io import BytesIO
     from collections import Counter
-    from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+    from sklearn.feature_extraction.text import CountVectorizer
     import numpy as np
 
     # Try import wordcloud, or skip feature if not available
@@ -415,17 +415,22 @@ if auth_controller():
 
     def plot_top_ngrams(df, main_col=None, n=3, review_col=None, top_n=5):
         """
-        Plot top n-grams from NEGATIVE reviews using TF-IDF for better relevance.
-        Auto-detects text column if not provided.
+        Plot top n-grams from NEGATIVE reviews using raw frequency counts.
+        Focuses on top 5 aspects with highest negative mentions.
+        Supports n=3 (trigrams) and n=4 (four-grams).
         """
+    
+        # Validate n-gram size
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
+    
+        # Validate required columns
         if "Aspect_Sentiment" not in df.columns or "Aspect" not in df.columns:
             st.warning("Columns 'Aspect_Sentiment' and 'Aspect' are required.")
             return
     
-        # Use provided col name or fallback
+        # Determine text column
         review_col = review_col or main_col
         if review_col not in df.columns:
             text_candidates = [c for c in df.columns if df[c].dtype == "object"]
@@ -440,7 +445,7 @@ if auth_controller():
             st.info("No negative reviews available.")
             return
     
-        # Focus on top 5 aspects
+        # Focus on top 5 aspects with most negative mentions
         top_aspects = neg_df["Aspect"].value_counts().head(5).index.tolist()
         neg_df = neg_df[neg_df["Aspect"].isin(top_aspects)]
     
@@ -450,12 +455,14 @@ if auth_controller():
             st.info("No text available for negative reviews.")
             return
     
-        # TF-IDF vectorizer
-        tfidf = TfidfVectorizer(ngram_range=(n, n), stop_words='english', min_df=2)
+        # CountVectorizer for raw frequency
+        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', min_df=2)
         try:
-            matrix = tfidf.fit_transform(texts)
-            scores = zip(tfidf.get_feature_names_out(), matrix.sum(axis=0).A1)
-            top_f = sorted(scores, key=lambda x: x[1], reverse=True)[:top_n]
+            matrix = cv.fit_transform(texts)
+            sums = matrix.sum(axis=0).A1  # Raw counts
+            vocab = cv.get_feature_names_out()
+            freq = list(zip(vocab, sums))
+            top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
         except Exception as e:
             st.info(f"Failed to compute n-grams: {e}")
             return
@@ -464,25 +471,27 @@ if auth_controller():
             st.info("No meaningful n-grams found.")
             return
     
-        # Plot
-        labels, scores = zip(*top_f)
+        # Prepare plot
+        labels, counts = zip(*top_f)
         fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
         y_pos = np.arange(len(labels))
-        bars = ax.barh(y_pos, scores[::-1], color="#d62728")
+        bars = ax.barh(y_pos, counts[::-1], color="#d62728")  # Red for negative
         ax.set_yticks(y_pos)
         ax.set_yticklabels(labels[::-1], fontsize=11)
-        ax.set_xlabel("TF-IDF Score")
+        ax.set_xlabel("Frequency")
         title = {3: "Trigrams", 4: "Four-Grams"}[n]
         ax.set_title(f"Top {len(labels)} {title} in Negative Reviews (Top 5 Aspects)")
     
+        # Annotate bars with counts
         for bar in bars:
-            ax.annotate(f"{bar.get_width():.3f}",
-                        (bar.get_width() + 0.01, bar.get_y() + bar.get_height() / 2),
+            ax.annotate(f"{int(bar.get_width())}",
+                        (bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2),
                         va="center", fontsize=9, fontweight="bold")
     
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
+
 
     def plot_aspect_popularity(summary_df):
         st.markdown("**Most Discussed Aspects by Sentiment**")
