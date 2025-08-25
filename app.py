@@ -414,83 +414,79 @@ if auth_controller():
         st.caption("Word cloud: Most frequent words in reviews (excluding stopwords).")
 
 
-    def plot_top_ngrams(df, text_col, sentiment_col, n=3, top_n=5):
+    def plot_top_negative_ngrams(df, aspect_col, text_col, sentiment_col, summary_df, n=3, top_n=5):
         """
-        Plot stacked bar chart of top n-grams grouped by sentiment (Positive, Neutral, Negative).
-        Supports only n=3 (trigrams) or n=4 (four-grams).
+        Plot top n-grams (trigrams or four-grams) from negative reviews
+        for the top 5 aspects with the highest negative mentions.
+    
+        Parameters:
+        - df: review-level DataFrame
+        - aspect_col: column containing aspect names
+        - text_col: column containing review text
+        - sentiment_col: column containing sentiment labels
+        - summary_df: aspect-level summary DataFrame
+        - n: n-gram size (3 or 4)
+        - top_n: number of n-grams to display
         """
         if n not in [3, 4]:
             st.warning("Only Trigrams (3) and Four-grams (4) are supported.")
             return
     
-        top_n = max(1, top_n)
+        # Get top 5 aspects by negative mentions
+        top_negative_aspects = summary_df.sort_values(by='Negative', ascending=False).head(5)['Aspect'].tolist()
+        filtered_df = df[(df[aspect_col].isin(top_negative_aspects)) & (df[sentiment_col] == "Negative")]
+    
+        if filtered_df.empty:
+            st.info("No negative reviews found for top negative aspects.")
+            return
+    
         ngram_titles = {3: "Trigrams (3-Word Phrases)", 4: "Four-Word Phrases (4-grams)"}
         title = ngram_titles[n]
+        st.markdown(f"### Top {top_n} {title} in Negative Reviews (Top 5 Negative Aspects)")
     
-        st.markdown(f"### Top {top_n} {title} by Sentiment (Stacked Bar)")
-    
-        sentiments = ["Positive", "Neutral", "Negative"]
-        sentiments_present = [s for s in sentiments if s in df[sentiment_col].unique()]
-    
-        if not sentiments_present:
-            st.info("No sentiment data found to plot stacked n-grams.")
+        # Combine text from all filtered reviews
+        texts = filtered_df[text_col].dropna().astype(str).tolist()
+        if not texts:
+            st.info("No valid review text available.")
             return
     
-        cv = CountVectorizer(ngram_range=(n, n), stop_words='english')
-    
-        # Calculate n-gram frequency per sentiment
-        freq_dict = {}
-        for s in sentiments_present:
-            texts = df[df[sentiment_col] == s][text_col].dropna().astype(str).tolist()
-            if not texts:
-                continue
-            try:
-                matrix = cv.fit_transform(texts)
-                sums = matrix.sum(axis=0)
-                freq = {word: sums[0, idx] for word, idx in cv.vocabulary_.items()}
-                top_f = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:top_n]
-                freq_dict[s] = dict(top_f)
-            except Exception:
-                freq_dict[s] = {}
-    
-        if not freq_dict:
-            st.info("No frequent phrases found for any sentiment.")
+        cv = CountVectorizer(ngram_range=(n, n), stop_words='english', max_features=50)
+        try:
+            matrix = cv.fit_transform(texts)
+            sums = matrix.sum(axis=0)
+            freq = [(word, sums[0, idx]) for word, idx in cv.vocabulary_.items()]
+            top_f = sorted(freq, key=lambda x: x[1], reverse=True)[:top_n]
+        except Exception:
+            st.info("Failed to compute n-grams.")
             return
     
-        # Combine top n-grams across sentiments
-        all_ngrams = set()
-        for d in freq_dict.values():
-            all_ngrams.update(d.keys())
-        all_ngrams = list(all_ngrams)
+        if not top_f:
+            st.info("No frequent phrases found.")
+            return
     
-        # Prepare data for stacked bar
-        data = {s: [freq_dict.get(s, {}).get(g, 0) for g in all_ngrams] for s in sentiments_present}
-        indices = np.arange(len(all_ngrams))
+        # Plot horizontal bar chart
+        labels, counts = zip(*top_f)
+        fig, ax = plt.subplots(figsize=(8, max(4, 0.6 * len(labels))))
+        y_pos = np.arange(len(labels))
+        bars = ax.barh(y_pos, counts[::-1], color='#d62728')  # Red for negative
+        ax.set_yticks(y_pos)
+        ax.set_yticklabels(labels[::-1], fontsize=11)
+        ax.set_xlabel("Frequency")
+        ax.set_title(f"Top {len(labels)} {title} (Negative Sentiment)")
     
-        # Plot stacked bar
-        fig, ax = plt.subplots(figsize=(10, 6))
-        bottom_vals = np.zeros(len(all_ngrams))
-        colors = {'Positive': '#2ca02c', 'Neutral': '#ffbb78', 'Negative': '#d62728'}
-    
-        for s in sentiments_present:
-            ax.bar(all_ngrams, data[s], bottom=bottom_vals, label=s, color=colors.get(s, '#1f77b4'))
-            bottom_vals += np.array(data[s])
-    
-        ax.set_ylabel("Frequency")
-        ax.set_title(f"Top {top_n} {title} by Sentiment (Stacked)")
-        ax.set_xticks(indices)
-        ax.set_xticklabels(all_ngrams, rotation=30, ha='right', fontsize=11)
-        ax.legend()
-    
-        # Add annotations for total height
-        for i, total in enumerate(bottom_vals):
-            if total > 0:
-                ax.text(i, total + 0.3, str(int(total)), ha='center', va='bottom', fontsize=9, fontweight='bold')
+        # Annotate bars with values
+        for bar in bars:
+            ax.annotate(
+                f"{int(bar.get_width())}",
+                (bar.get_width() + 0.2, bar.get_y() + bar.get_height() / 2),
+                va='center',
+                fontsize=9,
+                fontweight='bold'
+            )
     
         plt.tight_layout()
         st.pyplot(fig)
         plt.close(fig)
-
 
     def plot_aspect_popularity(summary_df):
         st.markdown("**Most Discussed Aspects by Sentiment**")
@@ -724,10 +720,11 @@ if auth_controller():
 
             # Continue other ngram plots
             # For trigrams
-            plot_top_ngrams(df_out, text_col="Review", sentiment_col="Aspect_Sentiment", n=3, top_n=5)
+            plot_top_negative_ngrams(df_out, aspect_col="Aspect", text_col="Review", sentiment_col="Aspect_Sentiment", summary_df=summary_df, n=3, top_n=5)
             
             # For four-grams
-            plot_top_ngrams(df_out, text_col="Review", sentiment_col="Aspect_Sentiment", n=4, top_n=5)
+            plot_top_negative_ngrams(df_out, aspect_col="Aspect", text_col="Review", sentiment_col="Aspect_Sentiment", summary_df=summary_df, n=4, top_n=5)
+
 
 
             # Downloads
