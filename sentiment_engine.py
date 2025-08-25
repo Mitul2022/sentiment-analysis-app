@@ -16,6 +16,10 @@ import matplotlib.pyplot as plt
 from fpdf import FPDF
 import gradio as gr
 import streamlit as st
+from sentence_transformers import SentenceTransformer, util
+
+# Initialize model once globally
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 #####################
 # Dependency checks #
@@ -614,162 +618,34 @@ class PDFReport(FPDF):
         os.remove(image_path)
         self.ln()
 
-
-def build_recommendations_for_aspect(aspect, neg_reviews, max_recommendations=10, min_phrase_count=1):
-    import collections
-    from sklearn.feature_extraction.text import CountVectorizer
-
-    # Hardcoded fallback phrases per aspect (fill with your full expanded lists)
-    aspect_themes = {
-        "delivery": [
-            "late", "delay", "not on time", "missed", "slow", "lost", "no tracking",
-            "delayed", "delivery delay", "shipping delay", "arrived late", "waiting too long",
-            "never arrived", "did not deliver", "not delivered", "package stuck", "shipping issues",
-            "delivery problem", "failed delivery", "delivery took too long", "delayed shipment",
-            "shipping took forever", "late shipment", "parcel lost", "no shipping info",
-            "cannot track package", "tracking issues", "shipment delayed",
-            "delivery cancelled", "missed delivery window", "delayed dispatch", "lost in transit",
-            "package delayed", "delivery not received", "delivery unclear", "delivery mess-up",
-            "delayed courier", "delivery agent no-show", "delivery postponed", "delivery incomplete",
-            "shipping damaged", "package left wrong address", "delivery instructions ignored"
-        ],
-        "quality": [
-            "wilted", "dead", "poor", "bad", "damaged", "broken", "dry", "not fresh",
-            "spoiled", "stale", "rotten", "defective", "faulty", "substandard",
-            "low quality", "inferior quality", "crumbled", "cracked", "discolored",
-            "not as described", "broken parts", "damaged goods", "expired", "not working",
-            "malfunctioning", "cheaply made", "defective product", "poorly made",
-            "flawed", "scratched", "uneven", "dented", "moldy", "smelly", "contaminated",
-            "bad texture", "wrong color", "incorrect specifications", "broken seal",
-            "missing pieces", "faded", "worn out", "disassembled", "junk", "inferior materials",
-            "fragile", "poor craftsmanship"
-        ],
-        "order": [
-            "wrong item", "not received", "canceled", "didn't arrive", "missing", "duplicate", "error",
-            "incorrect item", "order error", "order never arrived", "missing items", "order incomplete",
-            "cancelled order", "wrong shipment", "did not get order", "lost order",
-            "received wrong product", "order mix-up", "confused order", "order delayed",
-            "delivery mix-up", "order processing error",
-            "order rejected", "order lost", "order voided", "not processed", "partial order",
-            "order stuck", "order never confirmed", "order failed", "wrong quantity",
-            "backordered", "double charge", "order duplication"
-        ],
-        "price": [
-            "expensive", "overpriced", "not worth", "cheap", "costly", "pricey", "bad value",
-            "too expensive", "price too high", "not value for money", "overcharging",
-            "rip off", "price gouging", "hidden cost", "extra charges", "not worth the price",
-            "expensive for quality", "unfair pricing", "price hike", "costly purchase",
-            "overbudget", "price mismatch", "wrong pricing", "price too steep",
-            "unexpected fees", "service charges too high", "price not justified", "expensive shipping"
-        ],
-        "customer service": [
-            "slow response", "unhelpful", "no reply", "bad support", "rude", "not resolved",
-            "ignored", "no assistance", "poor communication", "unprofessional", "disrespectful",
-            "no customer service", "bad experience", "no follow-up", "long wait time",
-            "didn't help", "lack of support", "not friendly", "unresponsive", "not satisfied",
-            "poor handling", "incompetent", "unavailable", "disorganized", "disinterested",
-            "did not answer", "no callback", "repeated transfers", "uncaring", "dismissive",
-            "no empathy", "inconsistent information", "did not understand problem"
-        ],
-        "refund": [
-            "no refund", "didn't get refund", "delayed refund", "refused", "slow refund", "hard to get",
-            "refund denied", "refund never processed", "waiting for refund", "refund issues",
-            "no reimbursement", "delayed reimbursement", "refund problem", "hard refund process",
-            "refused to refund", "partial refund", "refund policy unclear", "refund took long",
-            "refund rejected", "refund request ignored", "refund not honored", "refund not credited",
-            "refund confusing", "refund rules unfair", "refund failed", "refund paperwork complicated"
-        ],
-        "website": [
-            "hard to use", "confusing", "bug", "crash", "not working", "error",
-            "website down", "slow website", "page not loading", "website glitch", "checkout error",
-            "payment failed", "site crash", "website broken", "navigation difficult",
-            "website loading issues", "website unusable", "cannot complete order", "form errors",
-            "website bug", "technical problems", "site hangs",
-            "website freeze", "website slow response", "website not mobile friendly",
-            "website not intuitive", "browser incompatibility", "unable to login",
-            "password reset issues", "broken links", "website error message"
-        ],
-        "value": [
-            "not worth", "poor value", "cheap", "overpriced", "not good value",
-            "bad value", "waste of money", "poor return", "low value", "not cost effective",
-            "disappointing", "value mismatch", "expensive for what it offers",
-            "not worth the cost", "value for money lacking", "price to value ratio low",
-            "did not meet expectations", "underwhelming", "overhyped", "too costly",
-            "false advertising", "poor investment", "not beneficial", "not economical"
-        ],
-        "packaging": [
-            "damaged", "bad packaging", "broken box", "leaking", "messy",
-            "poor packaging", "crushed box", "torn wrapper", "broken seal", "package crushed",
-            "inadequate packaging", "opened package", "package ripped", "badly packed",
-            "leaking contents", "package dirty", "package wet", "fragile packaging",
-            "container broken", "insufficient padding", "package smashed", "taped poorly",
-            "package torn open", "label missing", "not secure", "packaging sloppy",
-            "package dented", "package exploded"
-        ],
-        "communication": [
-            "no update", "no communication", "late info", "not informed",
-            "lack of communication", "not notified", "missed messages", "no response",
-            "no follow-up", "poor communication", "communication failure", "no tracking updates",
-            "no order updates", "not contacted", "communication delayed", "no email response",
-            "no call back", "missed notifications", "unclear information", "confusing messages",
-            "inconsistent updates", "communication breakdown", "lack of transparency",
-            "no feedback", "ignored messages"
-        ],
-    }
-
+def build_recommendations_for_aspect(aspect, neg_reviews, max_recs=10, min_count=1):
     if not neg_reviews or all(not r.strip() for r in neg_reviews):
-        return [f"No actionable recommendations for '{aspect}' at this time."]
+        return [f"No actionable recommendations for '{aspect}' currently."]
 
-    # Combine all negative reviews into one blob of text
-    reviews_blob = " ".join(str(r).lower() for r in neg_reviews if r.strip())
+    text_blob = " ".join(r.lower() for r in neg_reviews if r.strip())
+    vectorizer = CountVectorizer(ngram_range=(1,3), stop_words='english', min_df=2)
+    X = vectorizer.fit_transform([text_blob])
+    phrases_freq = sorted(
+        ((phrase, X[0, idx]) for phrase, idx in vectorizer.vocabulary_.items()),
+        key=lambda x: x[1], reverse=True
+    )
+    candidates = [p for p, c in phrases_freq if c >= min_count]
+    
+    aspect_emb = model.encode(aspect.lower(), convert_to_tensor=True)
+    candidate_embs = model.encode(candidates, convert_to_tensor=True)
+    cosine_scores = util.pytorch_cos_sim(aspect_emb, candidate_embs)[0]
 
-    # Use CountVectorizer with no max_features to capture all features, 1-3grams, ignoring English stopwords
-    vectorizer = CountVectorizer(
-        ngram_range=(1, 3),
-        stop_words='english',
-        min_df=2  # Occur in at least 2 places to reduce noise, adjustable
-        # max_features None by default means no limit (captures all)
+    scored = sorted(
+        zip(candidates, (phrases_freq[i][1] for i in range(len(candidates))), cosine_scores.cpu().tolist()),
+        key=lambda x: (x[2], x[1]),
+        reverse=True
     )
 
-    X = vectorizer.fit_transform([reviews_blob])
-    freq = [(word, X[0, idx]) for word, idx in vectorizer.vocabulary_.items()]
-    freq_sorted = sorted(freq, key=lambda x: x[1], reverse=True)
+    recommendations = [f"{aspect.title()}: Top data-driven concerns:"]
+    for phrase, count, score in scored[:max_recs]:
+        recommendations.append(f"Address '{phrase}' in {aspect.title()} (relevance {score:.2f}).")
 
-    aspect_lower = aspect.lower()
-    hardcoded_phrases = aspect_themes.get(aspect_lower, [])
-
-    # Create a set of words from hardcoded phrases for filtering relevant dynamic phrases
-    hardcoded_keywords = set()
-    for phrase in hardcoded_phrases:
-        hardcoded_keywords.update(phrase.split())
-
-    filtered_phrases = []
-    for phrase, count in freq_sorted:
-        if count < min_phrase_count:
-            continue
-        phrase_words = set(phrase.split())
-        # Keep phrase if it shares any word with known keywords or contains the aspect name
-        if phrase_words & hardcoded_keywords or aspect_lower in phrase:
-            filtered_phrases.append((phrase, count))
-            if len(filtered_phrases) >= max_recommendations:
-                break
-
-    recommendations = []
-    if filtered_phrases:
-        recommendations.append(f"{aspect.title()}: Prioritize fixing these top issues to increase satisfaction and reduce negative feedback.")
-        for phrase, _ in filtered_phrases:
-            recommendations.append(f"Address '{phrase}' issues in {aspect.title()}.")
-    else:
-        # Fallback to hardcoded phrases if no dynamic matching found
-        if hardcoded_phrases:
-            recommendations.append(f"No clear dynamic issues found for '{aspect}'. Using general guidance.")
-            recommendations.append(f"{aspect.title()}: Prioritize fixing common issues to increase satisfaction.")
-            for phrase in hardcoded_phrases[:max_recommendations-2]:
-                recommendations.append(f"Address '{phrase}' issues in {aspect.title()}.")
-        else:
-            recommendations.append(f"No actionable recommendations for '{aspect}' at this time.")
-
-    return recommendations[:max_recommendations]
+    return recommendations
     
 def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
     def normalize(text):
