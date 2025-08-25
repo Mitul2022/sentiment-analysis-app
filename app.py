@@ -188,7 +188,7 @@ if auth_controller():
                     index=0,
                 )
     
-                if selected_filter_column == "None":
+                if selected_filter_column == "Select All":
                     selected_filter_column = None
     
                 if selected_filter_column:
