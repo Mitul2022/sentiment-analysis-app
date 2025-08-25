@@ -505,59 +505,76 @@ if auth_controller():
     
         analysed_count = len(df)
     
-        # First row: 3 columns for first 3 KPIs
+        # Compute Metrics
+        total_reviews = f"{analysed_count:,}"
+    
+        # Top Positive Aspect
+        if not summary_df.empty and "Positive" in summary_df.columns:
+            top_positive_row = summary_df.sort_values(by="Positive", ascending=False).iloc[0]
+            top_positive_aspect = top_positive_row["Aspect"]
+            top_positive_value = int(top_positive_row["Positive"])
+            top_positive_display = f"{top_positive_aspect} — {top_positive_value:,} Mentions"
+        else:
+            top_positive_display = "-"
+    
+        # Top Negative Aspect
+        if not summary_df.empty and "Negative" in summary_df.columns:
+            top_negative_row = summary_df.sort_values(by="Negative", ascending=False).iloc[0]
+            top_negative_aspect = top_negative_row["Aspect"]
+            top_negative_value = int(top_negative_row["Negative"])
+            top_negative_display = f"{top_negative_aspect} — {top_negative_value:,} Mentions"
+        else:
+            top_negative_display = "-"
+    
+        # Create metrics with clean design
+        st.markdown("""
+            <style>
+            .metric-card {
+                background: #f9fbff;
+                border: 1px solid #cddaf6;
+                border-radius: 12px;
+                padding: 14px 18px;
+                text-align: center;
+                margin-bottom: 12px;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+            }
+            .metric-title {
+                font-size: 1.1rem;
+                font-weight: 700;
+                color: #003366;
+                margin-bottom: 8px;
+            }
+            .metric-value {
+                font-size: 1.2rem;
+                font-weight: 600;
+                color: #0073b8;
+            }
+            </style>
+        """, unsafe_allow_html=True)
+    
         col1, col2, col3 = st.columns(3)
-    
-        # 1. Total Reviews
-        col1.metric("Total Reviews", f"{analysed_count:,}")
-    
-        # 2. Top Positive
-        if not summary_df.empty and 'Positive' in summary_df.columns and summary_df['Positive'].notnull().any():
-            sorted_pos_df = summary_df.sort_values(by="Positive", ascending=False)
-            top_positive = sorted_pos_df.iloc[0]
-            col2.metric("Top Positive", f"{top_positive['Aspect']} ({int(top_positive['Positive'])})")
-        else:
-            col2.metric("Top Positive", "-")
-    
-        # 3. Top Negative
-        if not summary_df.empty and 'Negative' in summary_df.columns and summary_df['Negative'].notnull().any():
-            sorted_neg_df = summary_df.sort_values(by="Negative", ascending=False)
-            top_negative = sorted_neg_df.iloc[0]
-            col3.metric("Top Negative", f"{top_negative['Aspect']} ({int(top_negative['Negative'])})")
-        else:
-            col3.metric("Top Negative", "-")
-    
-        # Second row: 2 columns for 4th KPI
-        col4, _ = st.columns([2, 1])  # leave space empty for alignment
-    
-        # 4. Highest Negative %
-        if not summary_df.empty and all(col in summary_df.columns for col in ['Negative', 'Total Mentions']):
-            summary_df['Neg Ratio'] = summary_df['Negative'] / summary_df['Total Mentions']
-            sorted_neg_ratio_df = summary_df.sort_values(by="Neg Ratio", ascending=False)
-            worst_skewed = sorted_neg_ratio_df.iloc[0]
-            col4.metric("Highest Negative %", f"{worst_skewed['Aspect']} ({worst_skewed['Neg Ratio']*100:.1f}%)")
-        else:
-            col4.metric("Highest Negative %", "-")
-    
-        # Third row: full width for 5th KPI
-        col_full = st.columns(1)
-        col = col_full[0]
-    
-        # 5. Most Polarizing
-        needed_columns = ['Positive (%)', 'Negative (%)', 'Neutral (%)']
-        if not summary_df.empty and all(col in summary_df.columns for col in needed_columns):
-            summary_df['Polarity Gap'] = abs(summary_df['Positive (%)'] - summary_df['Negative (%)'])
-            filtered_df = summary_df[summary_df['Neutral (%)'] < 50]
-            if not filtered_df.empty:
-                polarizing = filtered_df.sort_values(by="Polarity Gap", ascending=True).iloc[0]
-                col.metric(
-                    "Most Polarizing",
-                    f"{polarizing['Aspect']} ({polarizing['Positive (%)']:.1f}% 👍 / {polarizing['Negative (%)']:.1f}% 👎)"
-                )
-            else:
-                col.metric("Most Polarizing", "-")
-        else:
-            col.metric("Most Polarizing", "-")
+        with col1:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-title">Total Reviews</div>
+                    <div class="metric-value">{total_reviews}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-title">Top Positive Aspect</div>
+                    <div class="metric-value">{top_positive_display}</div>
+                </div>
+            """, unsafe_allow_html=True)
+        with col3:
+            st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-title">Top Negative Aspect</div>
+                    <div class="metric-value">{top_negative_display}</div>
+                </div>
+            """, unsafe_allow_html=True)
+
 
 
     def plot_overall_sentiment(df_out):
