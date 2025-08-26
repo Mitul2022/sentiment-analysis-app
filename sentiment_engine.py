@@ -455,13 +455,24 @@ def extract_dynamic_aspects_user(review_text, user_aspects, nps_val=None):
 # Analysis pipeline
 # -------------------------
 
-def analyze_review_structured(
-    df,
-    review_col,
-    nps_col=None,
-    user_aspects=None,
-    process_times=None
-):
+def normalize_single_nps_value(nps_val):
+    """
+    Normalize a single NPS value to 0–10 scale.
+    Supports scales like 0–5, 0–10, 0–100.
+    """
+    try:
+        nps_val = float(nps_val)
+        if nps_val < 0:
+            return None
+        if nps_val <= 5:
+            return nps_val * 2
+        elif nps_val > 10 and nps_val <= 100:
+            return nps_val / 10
+        return nps_val
+    except (ValueError, TypeError):
+        return None
+
+def analyze_review_structured(df, review_col, nps_col=None, user_aspects=None, process_times=None):
     if review_col not in df.columns:
         raise ValueError(f"Review column '{review_col}' not found.")
     if nps_col and nps_col not in df.columns:
@@ -470,10 +481,13 @@ def analyze_review_structured(
         raise ValueError(f"All entries in review column '{review_col}' are empty.")
 
     t0 = time.time()
+
     # Auto-detect aspects if user passed blank or asked for 'auto'
     if not user_aspects or (isinstance(user_aspects, str) and not user_aspects.strip()):
         detected = auto_detect_aspects_via_rake(df, review_col, top_n=10)
-        user_aspects = detected if detected else []
+        if not detected:  # fallback if Rake fails
+            detected = ["Delivery", "Price", "Quality", "Service"]
+        user_aspects = detected
     else:
         user_aspects = _normalize_user_aspects(user_aspects)
 
@@ -494,30 +508,21 @@ def analyze_review_structured(
         if not text:
             continue
 
+        # Normalize NPS value
         nps_val = row.get(nps_col) if nps_col else None
         if isinstance(nps_val, str):
             nps_val = nps_val.strip()
             if nps_val.lower() in ('none', '', 'nan'):
                 nps_val = None
-        try:
-            nps_val = float(nps_val)
-            if nps_val >= 0:
-                # Normalize single NPS value if needed
-                if nps_val <= 5:
-                    nps_val = nps_val * 2
-                elif nps_val > 10 and nps_val <= 100:
-                    nps_val = nps_val / 10
-            else:
-                nps_val = None
+        nps_val = normalize_single_nps_value(nps_val)
 
-        except (ValueError, TypeError):
-            nps_val = None
-
-        aspects = extract_dynamic_aspects_user(text, user_aspects)
+        # Extract aspects and sentiments using hybrid logic
+        aspects = extract_dynamic_aspects_user(text, user_aspects, nps_val=nps_val)
         for asp in aspects:
             asp["Review_ID"] = i if i is not None else idx
             asp["Review"] = text
             asp["NPS_Score"] = nps_val
+            # Include supplier/product if available
             for field in ['supplier_name', 'product_fullname']:
                 if field in df.columns:
                     asp[field] = row[field]
@@ -533,7 +538,6 @@ def analyze_review_structured(
         process_times["aspect_sentiment_extraction"] = round(time.time() - t0, 2)
 
     return pd.DataFrame(records)
-
 
 def groupby_supplier_product(detail_df, user_aspects):
     user_aspects = _normalize_user_aspects(user_aspects)
@@ -1350,175 +1354,3 @@ with gr.Blocks() as demo:
 
 if __name__ == "__main__":
     demo.launch()
-'''
-
-global_detail_df = pd.DataFrame()
-global_summary_df = pd.DataFrame()
-global_top_neg_reviews = {}
-global_nps_col = None
-
-
-def run_analysis(csv_file, review_column=None, nps_column=None, aspects=None, progress=gr.Progress()):
-    global global_detail_df, global_summary_df, global_top_neg_reviews, global_nps_col
-
-    if csv_file is None:
-        return "Upload CSV file.", None, None, None
-
-    try:
-        df = safe_read_csv(csv_file)
-        if nps_column and nps_column in df.columns:
-            df[nps_column] = pd.to_numeric(df[nps_column], errors='coerce')
-
-        uploaded_count = len(df)
-        review_col = review_column if review_column and review_column in df.columns else auto_detect_review_column(df)
-        nps_col = nps_column if nps_column and nps_column in df.columns else auto_detect_nps_column(df)
-
-        lang = detect_language_of_reviews(df, review_col)
-        if lang != 'en':
-            return f"Detected language: {lang}. Only English is supported.", None, None, None
-
-        if aspects is None or not str(aspects).strip():
-            return "Please enter at least one aspect (comma-separated, e.g. 'delivery,service,quality').", None, None, None
-        user_aspects = [a.strip() for a in str(aspects).split(",") if a.strip()]
-
-        detail_df = analyze_review_structured(df, review_col, nps_col, user_aspects=user_aspects)
-        summary_df = generate_sentiment_summary(detail_df)
-
-        global_detail_df = detail_df
-        global_summary_df = summary_df
-        global_top_neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, summary_df['Aspect'].head(10).tolist(), max_reviews=5)
-
-        summary_md = summary_df.head(10).to_markdown(index=False)
-        detail_md = detail_df.head(20).to_markdown(index=False)
-
-        processing_stats = dict(
-            uploaded_count=uploaded_count,
-            filtered_out=uploaded_count - len(detail_df['Review_ID'].unique()),
-            analysed_count=len(detail_df['Review_ID'].unique()),
-            unique_aspects=summary_df['Aspect'].nunique(),
-            aspect_mentions=len(detail_df),
-        )
-        pdf_bytes = create_pdf_report(detail_df, summary_df, processing_stats=processing_stats)
-
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(pdf_bytes)
-            temp_pdf_path = tmp.name
-
-        msg = f"✅ Analysis complete. {uploaded_count} reviews uploaded, {len(detail_df['Review_ID'].unique())} analyzed."
-        return msg, summary_md, detail_md, temp_pdf_path
-
-    except Exception as e:
-        import traceback
-        return f"Error: {e}\n{traceback.format_exc()}", None, None, None
-
-
-def chatbot_query(message, history):
-    if global_summary_df.empty or not global_top_neg_reviews:
-        return "", history + [[message, "Please upload and analyze data first."]]
-
-    msg_lower = message.lower()
-    response = ""
-
-    if any(word in msg_lower for word in ["thank", "bye"]):
-        response = "You're welcome! Ask more questions anytime."
-
-    elif any(word in msg_lower for word in ["main negative", "top problems"]):
-        neg_aspects = global_summary_df[global_summary_df['Dominant Sentiment'] == 'Negative']
-        if neg_aspects.empty:
-            response = "No dominant negative aspects found."
-        else:
-            response = "Main negative aspects:\n"
-            for _, row in neg_aspects.head(3).iterrows():
-                avg_nps = row['Avg NPS'] if isinstance(row['Avg NPS'], (int, float)) else "N/A"
-                response += f"- **{row['Aspect']}** ({row['Total Mentions']} mentions, {row['Negative (%)']}% negative, Avg NPS: {avg_nps})\n"
-
-    elif re.search(r"(sentiment|nps) for (.+)", msg_lower):
-        match = re.search(r"(sentiment|nps) for (.+)", msg_lower)
-        aspect_name = match.group(2).strip().title()
-        row = global_summary_df[global_summary_df['Aspect'].str.lower() == aspect_name.lower()]
-        if row.empty:
-            row = global_summary_df[global_summary_df['Aspect'].str.contains(aspect_name, case=False)]
-        if row.empty:
-            response = f"No data for aspect '{aspect_name}'."
-        else:
-            row = row.iloc[0]
-            avg_nps = row['Avg NPS'] if isinstance(row['Avg NPS'], (int, float)) else "N/A"
-            response = (
-                f"For **{row['Aspect']}**:\n"
-                f"- Positive: {row['Positive (%)']}%\n"
-                f"- Neutral: {row['Neutral (%)']}%\n"
-                f"- Negative: {row['Negative (%)']}%\n"
-                f"- Dominant: **{row['Dominant Sentiment']}**\n"
-                f"- Avg NPS: **{avg_nps}**"
-            )
-
-    elif re.search(r"(recommendations?|suggestions?) for (.+)", msg_lower):
-        match = re.search(r"(recommendations?|suggestions?) for (.+)", msg_lower)
-        aspect_name = match.group(2).strip().title()
-        rows = global_summary_df[global_summary_df['Aspect'].str.lower() == aspect_name.lower()]
-        if rows.empty:
-            rows = global_summary_df[global_summary_df['Aspect'].str.contains(aspect_name, case=False)]
-        if rows.empty:
-            response = f"No data for '{aspect_name}'."
-        else:
-            actual = rows.iloc[0]['Aspect']
-            reviews = global_top_neg_reviews.get(actual, [])
-            if not reviews:
-                response = f"No negative reviews for '{actual}' to generate recommendations."
-            else:
-                recs = build_recommendations_for_aspect(actual, reviews)
-                response = f"Recommendations for '{actual}':\n" + "\n".join(f"{i}. {r}" for i, r in enumerate(recs, 1))
-
-    else:
-        response = (
-            "Try asking:\n"
-            "- What are the main negative aspects?\n"
-            "- Sentiment for Food\n"
-            "- Recommendations for Service"
-        )
-
-    history.append([message, response])
-    return "", history
-
-
-# ==== Gradio UI ====
-with gr.Blocks() as demo:
-    gr.Markdown("# Customer Reviews and NPS Sentiment Analysis")
-    gr.Markdown("Upload your CSV/Excel file to analyze customer feedback and generate insights.")
-    with gr.Row():
-        with gr.Column(scale=1):
-            csv_input = gr.File(label="Upload File (.csv or .xlsx)")
-            review_input = gr.Textbox(label="Review Column (Optional)", placeholder="Leave blank to auto-detect")
-            nps_input = gr.Textbox(label="NPS Column (Optional)", placeholder="e.g., nps_score")
-            aspect_input = gr.Textbox(
-                label="Aspects to Analyze (comma-separated)",
-                placeholder="e.g. delivery, service, quality",
-            )
-            analyze_btn = gr.Button("🚀 Analyze Reviews")
-            status_text = gr.Markdown("📊 Upload a file to begin.")
-            pdf_output_file = gr.File(label="📥 Download Full PDF Report", visible=False)
-
-        with gr.Column(scale=2):
-            chatbot = gr.Chatbot(label="Ask Insights", height=400)
-            chatbox = gr.Textbox(label="Ask a question:", placeholder="E.g., 'What are the main negative aspects?'")
-            clear_btn = gr.Button("🗑️ Clear Chat")
-
-    gr.Markdown("---")
-    gr.Markdown("## Results")
-    with gr.Tabs():
-        with gr.TabItem("Summary (Top 10)"):
-            summary_output = gr.Markdown("Summary will appear here.")
-        with gr.TabItem("Raw Mentions (First 20)"):
-            detail_output = gr.Markdown("Detailed data will appear here.")
-
-    analyze_btn.click(
-        fn=run_analysis,
-        inputs=[csv_input, review_input, nps_input, aspect_input],
-        outputs=[status_text, summary_output, detail_output, pdf_output_file]
-    )
-    chatbox.submit(fn=chatbot_query, inputs=[chatbox, chatbot], outputs=[chatbox, chatbot])
-    clear_btn.click(lambda: [], None, chatbot)
-
-if __name__ == "__main__":
-    demo.launch()'''
-'
