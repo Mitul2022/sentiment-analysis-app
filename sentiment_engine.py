@@ -220,6 +220,15 @@ def extract_dynamic_aspects_user(review_text, user_aspects):
     review_text = html.unescape(review_text)
     doc = nlp(review_text)
     extracted = defaultdict(list)
+
+    # Extract noun chunks from the text as candidate aspects
+    candidate_noun_chunks = set()
+    for chunk in doc.noun_chunks:
+        # Clean and normalize noun chunk text
+        chunk_text = clean_phrase(chunk.text)
+        if chunk_text and len(chunk_text) > 2:
+            candidate_noun_chunks.add(chunk_text)
+
     for sent in doc.sents:
         sent_text = sent.text.strip()
         if not sent_text:
@@ -232,9 +241,19 @@ def extract_dynamic_aspects_user(review_text, user_aspects):
         else:
             label = "Neutral"
         sent_text_lc = sent_text.lower()
+
+        # Match user aspects and candidate noun chunks
+        matched_aspects = set()
         for aspect in user_aspects:
             if re.search(r'\b' + re.escape(aspect) + r'\b', sent_text_lc):
-                extracted[aspect.title()].append((sent_text, label, aspect))
+                matched_aspects.add(aspect.title())
+        for cand in candidate_noun_chunks:
+            if re.search(r'\b' + re.escape(cand) + r'\b', sent_text_lc):
+                matched_aspects.add(cand.title())
+
+        for aspect in matched_aspects:
+            extracted[aspect].append((sent_text, label, aspect.lower()))
+
     data = []
     for aspect, mentions in extracted.items():
         agg_sent = aggregate_aspect_sentiments(mentions)
@@ -249,7 +268,6 @@ def extract_dynamic_aspects_user(review_text, user_aspects):
             "Quotes": quotes,
         })
     return data
-
 
 def analyze_review_structured(
     df,
@@ -632,6 +650,7 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
     Dynamically build actionable recommendations from negative reviews
     without hardcoded keywords.
     Uses RAKE + SpaCy for keyphrase extraction.
+    Always produces at least one recommendation if any negative review exists.
     """
     if not neg_reviews or all(not str(r).strip() for r in neg_reviews):
         return [f"No actionable recommendations for '{aspect}' at this time."]
@@ -676,7 +695,8 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
         if len(top_issues) >= 3:
             recs.append(f"Work on better handling of '{top_issues[1]}' and '{top_issues[2]}'.")
     else:
-        recs.append(f"No strong issue patterns found for '{aspect}'. Continue monitoring.")
+        # Provide a minimal fallback recommendation if no phrases found but negative reviews exist
+        recs.append(f"Aspect '{aspect}' has negative feedback. Please investigate and improve.")
 
     return recs[:5]
 
