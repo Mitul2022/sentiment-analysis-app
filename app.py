@@ -6,6 +6,7 @@ from auth import auth_controller
 if auth_controller():
 
     import pandas as pd
+    import plotly.graph_objects as go
     import time
     import traceback
     import re
