@@ -370,59 +370,65 @@ if auth_controller():
 
     # Visualization Helpers
 
+    def normalize_nps_scores(nps_series):
+        """
+        Normalize NPS scores to a 0–10 scale.
+        Handles scales: 0–10 (no change), 0–5 (multiplied by 2), 0–100 (divided by 10).
+        """
+        if nps_series.empty:
+            return nps_series
+        max_val = nps_series.max()
+        if max_val <= 5:
+            return nps_series * 2  # scale 0–5 → 0–10
+        elif max_val > 10 and max_val <= 100:
+            return nps_series / 10  # scale 0–100 → 0–10
+        return nps_series
+
     def plot_nps_gauge(df):
         st.markdown("<h3>Net Promoter Score (NPS) Analysis</h3>", unsafe_allow_html=True)
+    
+        # Auto-detect NPS column
         nps_colname = None
         for c in df.columns:
             if c.lower() in ('nps_score', 'nps', 'score', 'rating', 'net promoter score'):
                 nps_colname = c
                 break
+    
         if not nps_colname:
             st.info("No NPS score column found.")
             return
-
-        scores = df[nps_colname]
-        scores = scores.dropna()
-        scores = scores[(scores >= 0) & (scores <= 10)]
-
+    
+        scores = df[nps_colname].dropna()
+        scores = scores[scores >= 0]
+        scores = normalize_nps_scores(scores)  # ✅ Normalize scale here
+    
         total = len(scores)
         promoters = ((scores >= 9) & (scores <= 10)).sum()
         detractors = ((scores >= 0) & (scores <= 6)).sum()
-
         pct_promoters = promoters / total * 100 if total else 0
         pct_detractors = detractors / total * 100 if total else 0
         nps_score = pct_promoters - pct_detractors
-
-        # Define gauge parameters
-        gauges = [(-100, 0), (0, 30), (30, 70), (70, 100)]
-        colors = ["#d7191c", "#fdae61", "#a6d96a", "#1a9641"]
-        labels = ["Poor", "Fair", "Good", "Excellent"]
-        ticks = [-100, 0, 30, 70, 100]
-
-        fig, ax = plt.subplots(figsize=(8, 1.5))
-        for i, (start, end) in enumerate(gauges):
-            ax.barh(0, end - start, left=start, height=0.6, color=colors[i])
-
-        ax.axvline(nps_score, 0, 1, color='navy', lw=3)
-        ax.set_xlim(-100, 100)
-        ax.set_yticks([])
-        ax.set_xlabel("NPS Score", fontsize=11, fontweight='bold')
-
-        for t in ticks:
-            ax.text(t, -0.25, str(t), fontsize=10, fontweight='bold', ha='center')
-
-        for i, (start, end) in enumerate(gauges):
-            ax.text((start + end) / 2, -0.15, labels[i], fontsize=10, fontweight='bold', ha='center')
-
-        ax.text(nps_score, 0.4, f"{nps_score:.1f}", fontsize=13, fontweight='bold', ha='center', color='navy')
-        plt.box(False)
-        plt.axis('off')
-        plt.tight_layout()
-
-        st.pyplot(fig)
-        plt.close(fig)
-        st.caption("NPS = %Promoters − %Detractors; scale: -100 (worst) to 100 (best).")
-
+    
+        # Display NPS score as text
+        st.write(f"**NPS Score:** {nps_score:.2f} (Promoters: {promoters}, Detractors: {detractors}, Total: {total})")
+    
+        # Create gauge-like bar chart
+        fig = go.Figure(go.Indicator(
+            mode="gauge+number+delta",
+            value=nps_score,
+            title={'text': "NPS Score", 'font': {'size': 20}},
+            gauge={
+                'axis': {'range': [-100, 100]},
+                'bar': {'color': "darkblue"},
+                'steps': [
+                    {'range': [-100, 0], 'color': "lightcoral"},
+                    {'range': [0, 50], 'color': "khaki"},
+                    {'range': [50, 100], 'color': "lightgreen"}
+                ]
+            }
+        ))
+        fig.update_layout(height=300)
+        st.plotly_chart(fig, use_container_width=True)
 
     def plot_review_length(df, main_col, figsize=(8, 4.5)):
         st.markdown("<h3>Review Length Distribution</h3>", unsafe_allow_html=True)
