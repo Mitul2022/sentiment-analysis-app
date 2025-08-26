@@ -349,13 +349,15 @@ def auto_detect_aspects_via_rake(df, review_col, top_n=10):
 # Core extraction function
 # -------------------------
 
-def extract_dynamic_aspects_user(review_text, user_aspects):
+def extract_dynamic_aspects_user(review_text, user_aspects, nps_val=None):
     """
-    Improved dynamic aspect extraction:
-    - If user_aspects empty, auto-detect top aspects dynamically
-    - Expands variants via WordNet and lemmatization
-    - Matches via whole-word + fuzzy matching
-    - Returns list of aspect mentions with sentence-level sentiment
+    Improved dynamic aspect extraction with hybrid sentiment logic:
+    - Uses text sentiment as primary
+    - If NPS score is provided, adjusts sentiment:
+        * NPS ≥ 9 → Positive (unless text is extremely negative)
+        * NPS ≤ 6 → Negative (unless text is extremely positive)
+    - Adds flags for NPS-text mismatches
+    Returns list of dicts for each detected aspect with enhanced metadata.
     """
     review_text = html.unescape(str(review_text))
     doc = nlp(review_text)
@@ -369,30 +371,60 @@ def extract_dynamic_aspects_user(review_text, user_aspects):
     variants_map = expand_aspect_variants(user_aspects)
     extracted = defaultdict(list)
 
+    # --- Analyze sentence-level sentiment using VADER ---
     for sent in doc.sents:
         sent_text = sent.text.strip()
         if not sent_text:
             continue
 
+        # Base sentiment from VADER
         sent_score = sia.polarity_scores(sent_text)["compound"]
         if sent_score >= 0.3:
-            label = "Positive"
+            base_label = "Positive"
         elif sent_score <= -0.3:
-            label = "Negative"
+            base_label = "Negative"
         else:
-            label = "Neutral"
+            base_label = "Neutral"
 
+        # Hybrid adjustment with NPS
+        final_label = base_label
+        sentiment_source = "Text"
+        mismatch_flag = False
+
+        if nps_val is not None and 0 <= nps_val <= 10:
+            if nps_val >= 9:  # Promoter
+                if base_label == "Negative" and sent_score <= -0.7:
+                    # Strong contradiction - keep Negative but flag mismatch
+                    mismatch_flag = True
+                else:
+                    final_label = "Positive"
+                    sentiment_source = "Hybrid (NPS Override)"
+            elif nps_val <= 6:  # Detractor
+                if base_label == "Positive" and sent_score >= 0.7:
+                    # Strong contradiction - keep Positive but flag mismatch
+                    mismatch_flag = True
+                else:
+                    final_label = "Negative"
+                    sentiment_source = "Hybrid (NPS Override)"
+            elif nps_val in [7, 8]:  # Passive
+                # Keep text-based sentiment but note hybrid source
+                sentiment_source = "Hybrid (NPS Considered)"
+
+        # Match aspects within sentence
         for aspect in user_aspects:
             aspect_variants = variants_map.get(aspect, [aspect])
             if match_aspect_in_text(sent_text, aspect_variants):
                 aspect_key = aspect.lower().strip()
-                extracted[aspect_key].append((sent_text, label, sent_text))
+                extracted[aspect_key].append((sent_text, final_label, sent_text, sentiment_source, mismatch_flag))
 
+    # Build structured data
     data = []
     for aspect, mentions in extracted.items():
-        agg_sent = aggregate_aspect_sentiments(mentions)
+        agg_sent = aggregate_aspect_sentiments([(m[1], m[1], m[1]) for m in mentions])  # Use final labels for aggregation
         context = "; ".join(sorted(set(m[0] for m in mentions)))
         quotes = [m[2] for m in mentions]
+        mismatch = any(m[4] for m in mentions)
+        sources = list(set(m[3] for m in mentions))
         data.append({
             "Review_ID": None,
             "Review": None,
@@ -400,6 +432,8 @@ def extract_dynamic_aspects_user(review_text, user_aspects):
             "Aspect_Sentiment": agg_sent,
             "Aspect_Context": context,
             "Quotes": quotes,
+            "Sentiment_Source": ", ".join(sources),
+            "Sentiment_NPS_Mismatch": mismatch
         })
 
     return data
