@@ -698,9 +698,9 @@ def create_aspect_bar_chart(df_summary):
     x = np.arange(len(aspects))
     width = 0.25
 
-    bars_pos = ax.bar(x - width, positive, width, label='Positive')
-    bars_neu = ax.bar(x, neutral, width, label='Neutral')
-    bars_neg = ax.bar(x + width, negative, width, label='Negative')
+    bars_pos = ax.bar(x - width, positive, width, label='Positive', color='#2ECC71')  # Green
+    bars_neu = ax.bar(x, neutral, width, label='Neutral', color='#95A5A6')           # Gray
+    bars_neg = ax.bar(x + width, negative, width, label='Negative', color='#E74C3C') # Red
 
     ax.set_xlabel('Aspect')
     ax.set_ylabel('Mentions')
@@ -742,6 +742,7 @@ def create_negative_aspect_bar_chart(df_summary, top_n=10):
     bars = ax.bar(
         top_neg['Aspect'].apply(lambda x: x.title()),
         top_neg['Negative'],
+        color='#E74C3C'  # Red for Negative
     )
     ax.set_title(f"Most Discussed Negative Aspects by Sentiment", fontsize=14, fontweight='bold')
     ax.set_ylabel("Negative Mentions")
