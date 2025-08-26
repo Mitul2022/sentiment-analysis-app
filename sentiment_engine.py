@@ -196,7 +196,20 @@ def safe_read_csv(file, **kwargs):
 def limit_large_df(df):
     return df
 
-
+def normalize_nps_scores(nps_series):
+    """
+    Detect NPS scale and normalize to 0-10 if needed.
+    Assumes original scale is 0-10 or 0-5.
+    """
+    if nps_series.empty:
+        return nps_series
+    max_val = nps_series.max()
+    if max_val <= 5:  # Likely a 0-5 scale
+        return nps_series * 2
+    elif max_val > 10 and max_val <= 100:  # Possibly percentage (0-100)
+        return nps_series / 10
+    return nps_series
+    
 def aggregate_sentiment(counts):
     pos = counts.get('Positive', 0)
     neu = counts.get('Neutral', 0)
@@ -488,8 +501,15 @@ def analyze_review_structured(
                 nps_val = None
         try:
             nps_val = float(nps_val)
-            if not (0 <= nps_val <= 10):
+            if nps_val >= 0:
+                # Normalize single NPS value if needed
+                if nps_val <= 5:
+                    nps_val = nps_val * 2
+                elif nps_val > 10 and nps_val <= 100:
+                    nps_val = nps_val / 10
+            else:
                 nps_val = None
+
         except (ValueError, TypeError):
             nps_val = None
 
@@ -629,7 +649,8 @@ def benchmark_kpis(df_summary, df_detail=None):
 
     if df_detail is not None and "NPS_Score" in df_detail.columns:
         nps_vals = df_detail["NPS_Score"].dropna()
-        nps_vals = nps_vals[(nps_vals >= 0) & (nps_vals <= 10)]
+        nps_vals = nps_vals[nps_vals >= 0]
+        nps_vals = normalize_nps_scores(nps_vals)  # Normalize scale to 0-10
 
         total = len(nps_vals)
         promoters = nps_vals[(nps_vals >= 9) & (nps_vals <= 10)].count()
