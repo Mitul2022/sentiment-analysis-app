@@ -40,6 +40,16 @@ except LookupError:
     nltk.download('wordnet')
     nltk.download('omw-1.4')
 
+# Ensure required NLTK data is downloaded
+try:
+    nltk.data.find("tokenizers/punkt_tab")
+except LookupError:
+    nltk.download("punkt_tab")
+try:
+    nltk.data.find("tokenizers/punkt")
+except LookupError:
+    nltk.download("punkt")
+
 # Ensure SpaCy model is available
 try:
     nlp = spacy.load("en_core_web_sm")
