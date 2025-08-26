@@ -513,7 +513,7 @@ if auth_controller():
         width = 0.25
         fig, ax = plt.subplots(figsize=(10, 5))
         bars_pos = ax.bar(x - width, pos, width, label='Positive', color='#2ca02c')
-        bars_neu = ax.bar(x, neu, width, label='Neutral', color='#ffbb78')
+        bars_neu = ax.bar(x, neu, width, label='Neutral', color='#95A5A6')
         bars_neg = ax.bar(x + width, neg, width, label='Negative', color='#d62728')
         ax.set_xticks(x)
         ax.set_xticklabels(aspects, rotation=25, ha='right', fontsize=11)
