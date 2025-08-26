@@ -556,7 +556,7 @@ def groupby_supplier_product(detail_df, user_aspects):
             "Neutral": counts.get("Neutral", 0),
             "Negative": counts.get("Negative", 0)
         })
-        valid_nps = group["NPS_Score"].dropna()
+        valid_nps = normalize_nps_scores(group["NPS_Score"].dropna())
         if not valid_nps.empty:
             rec["Avg_NPS"] = round(valid_nps.mean(), 2)
             rec["Promoters"] = valid_nps[(valid_nps >= 9) & (valid_nps <= 10)].count()
@@ -592,7 +592,7 @@ def generate_sentiment_summary(df):
 
         avg_nps = promoters = passives = detractors = 0
         if "NPS_Score" in group.columns and group["NPS_Score"].notna().any():
-            valid_nps = group["NPS_Score"].dropna()
+            valid_nps = normalize_nps_scores(group["NPS_Score"].dropna())
             avg_nps = valid_nps.mean() if not valid_nps.empty else np.nan
             promoters = valid_nps[(valid_nps >= 9) & (valid_nps <= 10)].count()
             passives = valid_nps[(valid_nps >= 7) & (valid_nps <= 8)].count()
