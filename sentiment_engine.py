@@ -1,4 +1,4 @@
-
+import collections
 import re
 import string
 import textwrap
@@ -11,29 +11,40 @@ import html
 import pandas as pd
 import numpy as np
 import spacy
-from nltk.sentiment import SentimentIntensityAnalyzer
-import nltk
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 import gradio as gr
 import streamlit as st
 
+from rake_nltk import Rake
+from nltk.sentiment import SentimentIntensityAnalyzer
+import nltk
+
 #####################
 # Dependency checks #
 #####################
+# Download NLTK stopwords and VADER if missing
+try:
+    nltk.data.find('corpora/stopwords')
+except LookupError:
+    nltk.download('stopwords')
 try:
     nltk.data.find('sentiment/vader_lexicon.zip')
 except LookupError:
     nltk.download('vader_lexicon')
 
-import spacy
-nlp = spacy.load("en_core_web_sm")
+# Ensure SpaCy model is available
+try:
+    nlp = spacy.load("en_core_web_sm")
+except OSError:
+    from spacy.cli import download
+    download("en_core_web_sm")
+    nlp = spacy.load("en_core_web_sm")
 
 sia = SentimentIntensityAnalyzer()
 
 ARTICLES = {'the', 'a', 'an'}
 DEMONSTRATORS = {'this', 'that', 'these', 'those'}
-
 
 def clean_phrase(phrase: str) -> str:
     phrase = re.sub(r'[^\w\s]', '', phrase.lower()).strip()
@@ -615,323 +626,58 @@ class PDFReport(FPDF):
         os.remove(image_path)
         self.ln()
         
-def build_recommendations_for_aspect(aspect, neg_reviews):
-    import collections
-
-    if not neg_reviews or all(not r.strip() for r in neg_reviews):
+def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
+    """
+    Dynamically build actionable recommendations from negative reviews
+    without hardcoded keywords.
+    Uses RAKE + SpaCy for keyphrase extraction.
+    """
+    if not neg_reviews or all(not str(r).strip() for r in neg_reviews):
         return [f"No actionable recommendations for '{aspect}' at this time."]
 
+    # 1. Preprocess: join reviews for this aspect
     reviews_blob = " ".join([str(r).lower() for r in neg_reviews if r])
-    aspect_themes = {
-        "delivery": [
-            "late", "delay", "not on time", "missed", "slow", "lost", "no tracking",
-            "delayed", "delivery delay", "shipping delay", "arrived late", "waiting too long",
-            "never arrived", "did not deliver", "not delivered", "package stuck", "shipping issues",
-            "delivery problem", "failed delivery", "delivery took too long", "delayed shipment",
-            "shipping took forever", "late shipment", "parcel lost", "no shipping info",
-            "cannot track package", "tracking issues", "shipment delayed",
-            "delivery cancelled", "missed delivery window", "delayed dispatch", "lost in transit",
-            "package delayed", "delivery not received", "delivery unclear", "delivery mess-up",
-            "delayed courier", "delivery agent no-show", "delivery postponed", "delivery incomplete",
-            "shipping damaged", "package left wrong address", "delivery instructions ignored",
-            # --- New additions from reviews ---
-            "delivered after hours", "delivery after recipient left", "scheduled delivery not met",
-            "delivery 2 days late", "three days late", "full day late", "a few days late",
-            "delivery delayed due to weather", "delivery delayed by FedEx", "FedEx delays",
-            "countrywide delays", "delivery attempted but not left", "FedEx wouldn't leave",
-            "delivery went to wrong house", "delivery to hospital not handled", "delivery not completed when expected",
-            "delivery notification came after delivery", "delivery took too long", "delivery not on date promised",
-            "delivery not completed", "delivery by FedEx", "delivery agent didn't try", "delivery attempted multiple times",
-            "delivery not made", "delivery overdue", "delivery arrived early but in poor shape",
-            "flowers arrived 2 days early", "delivery not reliable", "unreliable delivery",
-            "delivery ruined (e.g., Mother's Day)", "delivery not time-sensitive", "delivery not tracked properly"
-        ],
-        "quality": [
-            "wilted", "dead", "poor", "bad", "damaged", "broken", "dry", "not fresh",
-            "spoiled", "stale", "rotten", "defective", "faulty", "substandard",
-            "low quality", "inferior quality", "crumbled", "cracked", "discolored",
-            "not as described", "broken parts", "damaged goods", "expired", "not working",
-            "malfunctioning", "cheaply made", "defective product", "poorly made",
-            "flawed", "scratched", "uneven", "dented", "moldy", "smelly", "contaminated",
-            "bad texture", "wrong color", "incorrect specifications", "broken seal",
-            "missing pieces", "faded", "worn out", "disassembled", "junk", "inferior materials",
-            "fragile", "poor craftsmanship",
-            # --- New additions from reviews ---
-            "flowers looked frozen", "frozen flowers", "bruised flowers", "petals falling off",
-            "roses small", "roses not good quality", "blooms underwhelming", "flowers not opened",
-            "only half looked good", "flowers didn't last", "lasted only 2 days", "dead in a few days",
-            "not lasted more than a few days", "died quickly", "wilted upon arrival", "wilted when opened",
-            "dark areas on roses", "signs of damage", "low temp damage", "flowers past prime",
-            "drooped in vase", "rotten when received", "made house smell", "mediocre bunch",
-            "not vibrant", "not fresh looking", "looked horrible", "flowers not in good condition",
-            "blossoms didn't open", "flowers not full", "not impressive", "underwhelming blooms",
-            "flowers not as expected", "not the same as picture", "too green filler", "wrong flowers delivered",
-            "not close to what was ordered", "not peonies", "had chrysanthemums instead", "not what I thought"
-        ],
-        "order": [
-            "wrong item", "not received", "canceled", "didn't arrive", "missing", "duplicate", "error",
-            "incorrect item", "order error", "order never arrived", "missing items", "order incomplete",
-            "cancelled order", "wrong shipment", "did not get order", "lost order",
-            "received wrong product", "order mix-up", "confused order", "order delayed",
-            "delivery mix-up", "order processing error",
-            "order rejected", "order lost", "order voided", "not processed", "partial order",
-            "order stuck", "order never confirmed", "order failed", "wrong quantity",
-            "backordered", "double charge", "order duplication",
-            
-            # --- Enhanced from real reviews ---
-            "order not delivered on due date",
-            "order not delivered on day due",
-            "order not fulfilled on time",
-            "order placed for Monday delivery but only Tuesday available",
-            "order showed up damaged",
-            "order arrived damaged",
-            "order not as pictured",
-            "order not what was expected",
-            "order not what was shown",
-            "order not accurate",
-            "order not completed",
-            "order not confirmed",
-            "order status inaccurate",
-            "tracking not updated",
-            "shipment notification only",
-            "no tracking info after shipment",
-            "order never shipped",
-            "order not dispatched",
-            "order not fulfilled",
-            "order not delivered by deadline",
-            "order not delivered on birthday",
-            "order ruined for occasion",
-            "fulfillment issues",
-            "could not place order for desired date",
-            "order changed without permission",
-            "someone changed my order",
-            "charged wrong amount",
-            "billed incorrectly",
-            "billing error",
-            "order canceled without notice",
-            "failed to cancel order",
-            "could not modify order",
-            "order change failed",
-            "promo code didn't work",
-            "coupon not accepted",
-            "discount not applied",
-            "credits lost",
-            "could not use store credit",
-            "concierge order issue",
-            "no tracking number sent",
-            "had to contact customer service to fix order",
-            "order required manual follow-up",
-            "first order had problems",
-            "current order in transit, unsure of outcome",
-            "wondering if order is reliable",
-            "nervous about order delivery",
-            "delivery deadline missed",
-            "disappointed with order",
-            "unsatisfying order",
-            "canceled my order due to poor quality"
-        ],
-        "price": [
-            "expensive", "overpriced", "not worth", "cheap", "costly", "pricey", "bad value",
-            "too expensive", "price too high", "not value for money", "overcharging",
-            "rip off", "price gouging", "hidden cost", "extra charges", "not worth the price",
-            "expensive for quality", "unfair pricing", "price hike", "costly purchase",
-            "overbudget", "price mismatch", "wrong pricing", "price too steep",
-            "unexpected fees", "service charges too high", "price not justified", "expensive shipping",
-            # --- New additions from reviews ---
-            "waste of money", "$50 too much to spend", "spent $60 on flowers never delivered",
-            "a little pricey", "pricey but good quality", "value for cost not met",
-            "store credit not worth it", "not worth the cost for late delivery", "paid for vase not received",
-            "charged for delivery not completed", "money not returned", "not worth the disappointment"
-        ],
-        "customer service": [
-            "slow response", "unhelpful", "no reply", "bad support", "rude", "not resolved",
-            "ignored", "no assistance", "poor communication", "unprofessional", "disrespectful",
-            "no customer service", "bad experience", "no follow-up", "long wait time",
-            "didn't help", "lack of support", "not friendly", "unresponsive", "not satisfied",
-            "poor handling", "incompetent", "unavailable", "disorganized", "disinterested",
-            "did not answer", "no callback", "repeated transfers", "uncaring", "dismissive",
-            "no empathy", "inconsistent information", "did not understand problem",
-            # --- New additions from reviews ---
-            "made light of issue", "blamed FedEx", "didn't own the issue", "great customer service",
-            "went above and beyond", "handled quickly with no hassle", "fast response",
-            "real answers not canned", "willing to fix issues", "good customer service via chat",
-            "replied but not helpful", "no help from customer service", "no follow-up after reply",
-            "required many emails", "reps not responsive", "customer service department great",
-            "appreciate how fast you respond", "customer service super", "helpful but too late",
-            "did not follow up", "no resolution offered", "offered store credit not refund",
-            "credit issued but not satisfactory", "store credit is BS", "customer service good but delivery bad"
-        ],
-        "refund": [
-            "no refund", "didn't get refund", "delayed refund", "refused", "slow refund", "hard to get",
-            "refund denied", "refund never processed", "waiting for refund", "refund issues",
-            "no reimbursement", "delayed reimbursement", "refund problem", "hard refund process",
-            "refused to refund", "partial refund", "refund policy unclear", "refund took long",
-            "refund rejected", "refund request ignored", "refund not honored", "refund not credited",
-            "refund confusing", "refund rules unfair", "refund failed", "refund paperwork complicated",
-            # --- New additions from reviews ---
-            "want my money back not store credit", "credit issued but I want refund",
-            "store credit is total BS", "no refund issued", "still waiting for refund",
-            "credit not applied until I emailed", "had to send multiple emails for credit",
-            "no apology", "no compensation for delay", "only offered store credit",
-            "refund not provided", "money not returned", "refund not processed",
-            "refund not mentioned", "no mention of refund", "no refund despite failure"
-        ],
-        "website": [
-            "hard to use", "confusing", "bug", "crash", "not working", "error",
-            "website down", "slow website", "page not loading", "website glitch", "checkout error",
-            "payment failed", "site crash", "website broken", "navigation difficult",
-            "website loading issues", "website unusable", "cannot complete order", "form errors",
-            "website bug", "technical problems", "site hangs",
-            "website freeze", "website slow response", "website not mobile friendly",
-            "website not intuitive", "browser incompatibility", "unable to login",
-            "password reset issues", "broken links", "website error message",
-        
-            # --- New & verified additions from real reviews ---
-            "website surprisingly difficult to navigate",
-            "had to contact customer service to get order right",
-            "order status not accurate",
-            "tracking not updated",
-            "website order status inaccurate",
-            "no tracking information until after delivery",
-            "cannot track order",
-            "promotions not clear",
-            "referral program faulty",
-            "links not working",
-            "profile not updating",
-            "promo credits not applied",
-            "website misleading",
-            "website not transparent",
-            "website caused confusion",
-            "misleading communication from website",
-        
-            # --- Additional high-impact phrases from reviews ---
-            "website functionality is horrid",
-            "difficult to navigate",
-            "guest checkout issue",
-            "cannot track my order as a guest",
-            "no tracking as guest",
-            "functionality poor",
-            "website crashed during checkout",
-            "site crashed while placing order",
-            "server crashed",
-            "website buggy",
-            "buggy website",
-            "clarity about availability missing",
-            "not clear what's available for my zip code",
-            "zip code availability issues",
-            "couldn't select higher quality flowers",
-            "hard to pick volcano flowers",
-            "design is a tragedy",
-            "horror to use",
-            "over-marketing made site worse",
-            "website design down-market",
-            "preset bounding box issue",
-            "email response box too small",
-            "mobile scrolling issue",
-            "forced to scroll back and forth on mobile",
-            "concierge setup issues",
-            "website messed up concierge order",
-            "addresses mixed up in concierge",
-            "lost all entered information",
-            "order information disappeared",
-            "delivery instructions not supported",
-            "no way to add delivery instructions",
-            "had to go through FedEx for delivery notes",
-            "no easy way to request evening delivery",
-            "special delivery request failed",
-            "website lacks delivery instruction field",
-            "user experience poor",
-            "poor UX",
-            "not user-friendly",
-            "took too long to complete order",
-            "frustrating to use",
-            "hard to modify order",
-            "changing orders inconsistent",
-            "can't change order easily",
-            "website doesn't save progress",
-            "lost my cart",
-            "auto-logged out",
-            "session expired too quickly",
-            "no guest order tracking",
-            "tracking only after email follow-up",
-            "had to contact support for basic info",
-            "no visibility into order status",
-            "assumed delivery happened",
-            "no proactive updates",
-            "website promises not met"
-        ],
-        "value": [
-            "not worth", "poor value", "cheap", "overpriced", "not good value",
-            "bad value", "waste of money", "poor return", "low value", "not cost effective",
-            "disappointing", "value mismatch", "expensive for what it offers",
-            "not worth the cost", "value for money lacking", "price to value ratio low",
-            "did not meet expectations", "underwhelming", "overhyped", "too costly",
-            "false advertising", "poor investment", "not beneficial", "not economical",
-            # --- New additions from reviews ---
-            "ruined someone's day", "ruined delivery", "ruined Mother's Day",
-            "not worth the disappointment", "not worth the hassle", "not worth the price for poor delivery",
-            "great quality but poor delivery", "beautiful flowers but wasted due to delay",
-            "good product but bad experience", "would not use again", "first time and last time",
-            "like I'll use you again", "won't order again", "deterred from ordering online",
-            "not worth for time-sensitive events", "experience not worth the money",
-            "great when it works, but unreliable"
-        ],
-        "packaging": [
-            "damaged", "bad packaging", "broken box", "leaking", "messy",
-            "poor packaging", "crushed box", "torn wrapper", "broken seal", "package crushed",
-            "inadequate packaging", "opened package", "package ripped", "badly packed",
-            "leaking contents", "package dirty", "package wet", "fragile packaging",
-            "container broken", "insufficient padding", "package smashed", "taped poorly",
-            "package torn open", "label missing", "not secure", "packaging sloppy",
-            "package dented", "package exploded",
-            # --- New additions from reviews ---
-            "vase had a hole", "leaking vase", "vase broken during delivery", "vase not received",
-            "paid for vase not delivered", "package damaged", "box damaged", "flowers damaged in box",
-            "package showed up damaged", "fragile not marked", "not marked fragile",
-            "package crushed by FedEx", "flowers frozen in packaging", "no insulation",
-            "packaging not protective", "flowers not secured", "box not sturdy"
-        ],
-        "communication": [
-            "no update", "no communication", "late info", "not informed",
-            "lack of communication", "not notified", "missed messages", "no response",
-            "no follow-up", "poor communication", "communication failure", "no tracking updates",
-            "no order updates", "not contacted", "communication delayed", "no email response",
-            "no call back", "missed notifications", "unclear information", "confusing messages",
-            "inconsistent updates", "communication breakdown", "lack of transparency",
-            "no feedback", "ignored messages",
-            # --- New additions from reviews ---
-            "no notification of delay", "chose to mislead me", "terrible communication",
-            "no communication about delay", "no email about delivery", "no update after order",
-            "not told delivery was late", "only one notification (delivery only)",
-            "no shipment notification", "delivery notification only", "no explanation",
-            "finally arrived with no notice", "no follow-up after email", "no transparency",
-            "no idea when it will be delivered", "unclear delivery time", "delivery window not met",
-            "no updates from company", "no proactive communication", "assumed delivery was on time",
-            "communication is key but missing", "no apology", "no acknowledgment of failure"
-        ]
-    }
 
-    summary = collections.Counter()
-    for key, complaint_phrases in aspect_themes.items():
-        if key in aspect.lower():
-            for phrase in complaint_phrases:
-                summary[phrase] += reviews_blob.count(phrase)
+    # 2. Remove the aspect word itself to avoid self-suggestions
+    aspect_lower = aspect.lower()
+    reviews_blob = re.sub(rf"\b{re.escape(aspect_lower)}\b", "", reviews_blob)
 
-    top_issues = [w for w, c in summary.most_common(5) if c > 0]
+    # 3. Use RAKE to extract key phrases
+    rake = Rake(min_length=1, max_length=3)  # allow unigrams, bigrams, trigrams
+    rake.extract_keywords_from_text(reviews_blob)
+    ranked_phrases = rake.get_ranked_phrases()
 
-    recommendations = []
+    # If RAKE fails (too few), fall back to most common words via SpaCy
+    if not ranked_phrases:
+        try:
+            nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            import subprocess
+            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"])
+            nlp = spacy.load("en_core_web_sm")
+
+        doc = nlp(reviews_blob)
+        words = [t.lemma_ for t in doc if t.pos_ in {"ADJ", "NOUN"} 
+                 and not t.is_stop and len(t.lemma_) > 2]
+        ranked_phrases = [w for w, _ in Counter(words).most_common(top_n)]
+
+    # 4. Take top_n distinct issues
+    top_issues = ranked_phrases[:top_n]
+
+    # 5. Build recommendation text
+    recs = []
     if top_issues:
+        issues_str = "', '".join(top_issues)
         aspect_nice = aspect.title()
-        issues_str = "', '".join(top_issues)  # Combine multiple issues into one string separated by "', '"
-        recommendations.append(
-            f"Address '{issues_str}' issues in {aspect_nice}."
-        )
+        recs.append(f"Customers report issues like '{issues_str}' in {aspect_nice}. Focus on improving these areas.")
+        if len(top_issues) >= 2:
+            recs.append(f"Highest priority for {aspect_nice}: reduce '{top_issues[0]}' problems.")
+        if len(top_issues) >= 3:
+            recs.append(f"Work on better handling of '{top_issues[1]}' and '{top_issues[2]}'.")
     else:
-        recommendations.append(
-            f"No actionable recommendations for '{aspect}' at this time."
-        )
-    
-    return recommendations[:10]
+        recs.append(f"No strong issue patterns found for '{aspect}'. Continue monitoring.")
+
+    return recs[:5]
 
 def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
     def normalize(text):
