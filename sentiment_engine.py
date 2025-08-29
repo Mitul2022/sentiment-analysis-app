@@ -24,7 +24,18 @@ import nltk
 import difflib
 from nltk.corpus import wordnet as wn
 
-# Global RAKE instance (reuse)
+import nltk
+from nltk.corpus import stopwords
+
+# Ensure stopwords are available
+try:
+    _ = stopwords.words("english")
+except LookupError:
+    nltk.download("stopwords", quiet=True)
+
+from rake_nltk import Rake
+
+# Global RAKE instance (reuse across functions)
 RAKE = Rake(min_length=1, max_length=3)
 
 #####################
