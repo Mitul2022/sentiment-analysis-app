@@ -899,31 +899,37 @@ def run_analysis(csv_file, review_column=None, nps_column=None, aspects=None, pr
 
         global_detail_df = detail_df
         global_summary_df = summary_df
-        global_top_neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, summary_df['Aspect'].head(10).tolist(), max_reviews=5)
+        global_top_neg_reviews = extract_top_negative_reviews_by_aspect(
+            detail_df,
+            summary_df['Aspect'].head(10).tolist(),
+            max_reviews=5
+        )
 
         summary_md = summary_df.head(10).to_markdown(index=False)
         detail_md = detail_df.head(20).to_markdown(index=False)
 
+        # ✅ Updated keys to match create_pdf_report expectations
+        processed_count = len(detail_df['Review_ID'].unique())
         processing_stats = dict(
-            uploaded_count=uploaded_count,
-            filtered_out=uploaded_count - len(detail_df['Review_ID'].unique()),
-            analysed_count=len(detail_df['Review_ID'].unique()),
+            uploaded=uploaded_count,
+            filtered_out=max(uploaded_count - processed_count, 0),
+            analysed=processed_count,
             unique_aspects=summary_df['Aspect'].nunique(),
             aspect_mentions=len(detail_df),
         )
+
         pdf_bytes = create_pdf_report(detail_df, summary_df, processing_stats=processing_stats)
 
         with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
             tmp.write(pdf_bytes)
             temp_pdf_path = tmp.name
 
-        msg = f"✅ Analysis complete. {uploaded_count} reviews uploaded, {len(detail_df['Review_ID'].unique())} analyzed."
+        msg = f"✅ Analysis complete. {uploaded_count} reviews uploaded, {processed_count} analyzed."
         return msg, summary_md, detail_md, temp_pdf_path
 
     except Exception as e:
         import traceback
         return f"Error: {e}\n{traceback.format_exc()}", None, None, None
-
 
 def chatbot_query(message, history):
     if global_summary_df.empty or not global_top_neg_reviews:
