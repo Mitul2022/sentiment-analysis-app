@@ -263,7 +263,7 @@ if auth_controller():
             nps_options = ["<Auto Detect>"] + review_columns
             nps_col_default_idx = nps_options.index(auto_nps_col) if auto_nps_col in nps_options else 0
             st.markdown(
-                "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Select NPS score column (0-10)</h3>",
+                "<h3 style='font-weight:bold; font-size:1.5rem; color:#003366;'>Select NPS score column (any scale)</h3>",
                 unsafe_allow_html=True,
             )
             nps_col = st.selectbox("", options=nps_options, index=nps_col_default_idx)
