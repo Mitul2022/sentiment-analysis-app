@@ -23,15 +23,33 @@ import nltk
 #####################
 # Dependency checks #
 #####################
+
+#####################
+# Dependency checks #
+#####################
+
 # Download NLTK stopwords and VADER if missing
 try:
     nltk.data.find('corpora/stopwords')
 except LookupError:
     nltk.download('stopwords')
+
 try:
     nltk.data.find('sentiment/vader_lexicon.zip')
 except LookupError:
     nltk.download('vader_lexicon')
+
+# Ensure punkt tokenizer is available (for RAKE)
+try:
+    nltk.data.find('tokenizers/punkt')
+except LookupError:
+    nltk.download('punkt')
+
+# Ensure punkt_tab (newer NLTK >=3.9) is available
+try:
+    nltk.data.find('tokenizers/punkt_tab')
+except LookupError:
+    nltk.download('punkt_tab')
 
 # Ensure SpaCy model is available
 try:
