@@ -703,7 +703,7 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=None):
     recs = []
     aspect_nice = aspect_key.title()
     if top_issues:
-        issues_str = "', '".join(top_issues[:min(5, len(top_issues))])
+        issues_str = "', '".join(top_issues)
         recs.append(f"Customers frequently mention '{issues_str}' related to {aspect_nice}. Investigate root causes immediately.")
         recs.append(f"Prioritize resolving '{top_issues[0]}' to improve {aspect_nice} experience.")
 
