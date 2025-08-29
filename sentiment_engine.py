@@ -829,7 +829,7 @@ def create_pdf_report(detail_df, summary_df, top_negative_suppliers=None,
     # Negative reviews
     pdf.section("RECENT NEGATIVE REVIEWS BY ASPECT")
     top_aspects = sorted_summary['Aspect'].head(10).tolist()
-    neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, top_aspects, max_reviews=None)
+    neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, top_aspects, max_reviews=5)
 
     for asp in top_aspects:
         pdf.subheading(f"{asp} - Negative Reviews")
