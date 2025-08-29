@@ -656,28 +656,27 @@ class PDFReport(FPDF):
         os.remove(image_path)
         self.ln()
         
-def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
+def build_recommendations_for_aspect(aspect, neg_reviews, top_n=None):
     """
-    Dynamically build actionable recommendations from negative reviews
-    without hardcoded keywords.
-    Uses RAKE + SpaCy for keyphrase extraction.
+    Dynamically build actionable recommendations from negative reviews.
+    - Extracts all meaningful issues (not capped at 5)
+    - Uses RAKE + SpaCy for keyphrase extraction
+    - Optional top_n to limit results
     """
+    aspect_key = aspect.lower().strip() if isinstance(aspect, str) else str(aspect)
     if not neg_reviews or all(not str(r).strip() for r in neg_reviews):
-        return [f"No actionable recommendations for '{aspect}' at this time."]
+        return [f"No actionable recommendations for '{aspect_key.title()}' at this time."]
 
-    # 1. Preprocess: join reviews for this aspect
+    # 1. Preprocess: join reviews
     reviews_blob = " ".join([str(r).lower() for r in neg_reviews if r])
+    reviews_blob = re.sub(rf"\b{re.escape(aspect_key)}\b", "", reviews_blob)
 
-    # 2. Remove the aspect word itself to avoid self-suggestions
-    aspect_lower = aspect.lower()
-    reviews_blob = re.sub(rf"\b{re.escape(aspect_lower)}\b", "", reviews_blob)
-
-    # 3. Use RAKE to extract key phrases
-    rake = Rake(min_length=1, max_length=3)  # allow unigrams, bigrams, trigrams
+    # 2. Extract key phrases with RAKE
+    rake = Rake(min_length=1, max_length=3)
     rake.extract_keywords_from_text(reviews_blob)
-    ranked_phrases = rake.get_ranked_phrases()
+    ranked_phrases = rake.get_ranked_phrases()[:50]  # expanded window
 
-    # If RAKE fails (too few), fall back to most common words via SpaCy
+    # 3. Fallback to SpaCy if RAKE fails
     if not ranked_phrases:
         try:
             nlp = spacy.load("en_core_web_sm")
@@ -687,29 +686,39 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
             nlp = spacy.load("en_core_web_sm")
 
         doc = nlp(reviews_blob)
-        words = [t.lemma_ for t in doc if t.pos_ in {"ADJ", "NOUN"} 
-                 and not t.is_stop and len(t.lemma_) > 2]
-        ranked_phrases = [w for w, _ in Counter(words).most_common(top_n)]
+        words = [t.lemma_ for t in doc if t.pos_ in {"NOUN", "ADJ"} and not t.is_stop]
+        ranked_phrases = [w for w, _ in Counter(words).most_common(50)]
 
-    # 4. Take top_n distinct issues
-    top_issues = ranked_phrases[:top_n]
+    # 4. Deduplicate issues
+    top_issues = []
+    for ph in ranked_phrases:
+        ph_clean = re.sub(r"[^\w\s]", '', ph.lower()).strip()
+        if ph_clean and ph_clean not in top_issues:
+            top_issues.append(ph_clean)
 
-    # 5. Build recommendation text
+    if top_n:
+        top_issues = top_issues[:top_n]
+
+    # 5. Build recommendations
     recs = []
+    aspect_nice = aspect_key.title()
     if top_issues:
-        issues_str = "', '".join(top_issues)
-        aspect_nice = aspect.title()
-        recs.append(f"Customers report issues like '{issues_str}' in {aspect_nice}. Focus on improving these areas.")
-        if len(top_issues) >= 2:
-            recs.append(f"Highest priority for {aspect_nice}: reduce '{top_issues[0]}' problems.")
-        if len(top_issues) >= 3:
-            recs.append(f"Work on better handling of '{top_issues[1]}' and '{top_issues[2]}'.")
-    else:
-        recs.append(f"No strong issue patterns found for '{aspect}'. Continue monitoring.")
+        issues_str = "', '".join(top_issues[:min(5, len(top_issues))])
+        recs.append(f"Customers frequently mention '{issues_str}' related to {aspect_nice}. Investigate root causes immediately.")
+        recs.append(f"Prioritize resolving '{top_issues[0]}' to improve {aspect_nice} experience.")
 
-    return recs[:5]
+    # Generic fallback if no strong issues
+    if not recs:
+        recs.append(f"No strong issue patterns found for {aspect_nice}. Continue monitoring.")
 
-def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
+    return recs if not top_n else recs[:top_n]
+
+
+def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=None):
+    """
+    Extract negative reviews dynamically per aspect.
+    If max_reviews=None, returns all unique negative reviews.
+    """
     def normalize(text):
         text = re.sub(r'page\s*\d+', '', text, flags=re.I)
         text = re.sub(r'^\d+\.\s*', '', text)
@@ -717,15 +726,19 @@ def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
         return text.strip().lower()
 
     reviews = {}
+    if detail_df.empty:
+        return {a: [] for a in aspects}
+
     unique_reviews = detail_df[['Review_ID', 'Review']].drop_duplicates()
     overall_scores = {
-        row['Review_ID']: sia.polarity_scores(row['Review'])['compound']
+        row['Review_ID']: sia.polarity_scores(str(row['Review']))['compound']
         for _, row in unique_reviews.iterrows()
     }
 
     for aspect in aspects:
+        aspect_key = aspect.lower().strip()
         filtered = detail_df[
-            (detail_df['Aspect'] == aspect) &
+            (detail_df['Aspect'].str.lower() == aspect_key) &
             (detail_df['Aspect_Sentiment'] == 'Negative')
         ].copy()
 
@@ -735,13 +748,12 @@ def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
 
         filtered['Overall_Score'] = filtered['Review_ID'].map(overall_scores)
         filtered['Context_Score'] = filtered['Aspect_Context'].apply(
-            lambda x: sia.polarity_scores(x)['compound']
+            lambda x: sia.polarity_scores(str(x))['compound']
         )
         filtered['Is_Overall_Negative'] = filtered['Overall_Score'] <= -0.3
         filtered = filtered.sort_values(['Is_Overall_Negative', 'Context_Score'], ascending=[False, True])
 
-        deduped_texts = []
-        seen_texts = set()
+        deduped_texts, seen_texts = [], set()
         for _, row in filtered.iterrows():
             norm = normalize(row['Review'])
             if not norm or norm in seen_texts:
@@ -750,24 +762,20 @@ def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
             cleaned_review = clean_text_for_pdf(row['Review'])
             if cleaned_review:
                 deduped_texts.append(cleaned_review)
-            if len(deduped_texts) >= max_reviews:
+            if max_reviews and len(deduped_texts) >= max_reviews:
                 break
         reviews[aspect] = deduped_texts
 
     return reviews
 
 
-def create_pdf_report(
-    detail_df,
-    summary_df,
-    top_negative_suppliers=None,
-    recommendations=None,
-    processing_stats=None
-):
+def create_pdf_report(detail_df, summary_df, top_negative_suppliers=None,
+                      recommendations=None, processing_stats=None):
     pdf = PDFReport()
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
+    # Executive summary
     pdf.section("EXECUTIVE SUMMARY & KEY INSIGHTS")
     if processing_stats:
         def safe_format(value):
@@ -780,17 +788,12 @@ def create_pdf_report(
         analysed_str = safe_format(processing_stats.get('analysed', 'N/A'))
         unique_str = safe_format(processing_stats.get('unique_aspects', 'N/A'))
 
-        # ✅ Compute mentions with fallback
-        mentions = None
-        if processing_stats and 'aspect_mentions' in processing_stats:
-            mentions = processing_stats.get('aspect_mentions')
-        if mentions is None:  # fallback if missing
-            mentions = len(detail_df) if detail_df is not None else 0
+        mentions = processing_stats.get('aspect_mentions',
+                    len(detail_df) if detail_df is not None else 0)
         mentions_str = safe_format(mentions)
 
         pdf.set_font(pdf.font_family, '', 11)
-        pdf.multi_cell(
-            0, 6,
+        pdf.multi_cell(0, 6,
             f"Data processing summary:\n"
             f"- Uploaded: {uploaded_str} reviews\n"
             f"- Filtered out: {filtered_str} (blanks, undefined, N/A)\n"
@@ -808,52 +811,25 @@ def create_pdf_report(
             f"Top mentioned aspect: {top['Aspect']} ({top['Total Mentions']} mentions)."
         )
 
+    # KPI section
     pdf.section("KEY METRICS & KPI OVERVIEW")
     kpi_df = benchmark_kpis(summary_df, detail_df)
     pdf.add_table(kpi_df, title="Sentiment & NPS Score KPIs")
 
+    # Charts
     pdf.section("SENTIMENT DISTRIBUTION BY TOP ASPECTS")
-    # Sort summary_df descending by total mentions for display
     sorted_summary = summary_df.copy()
-    sorted_summary['Total'] = sorted_summary['Positive'] + sorted_summary['Neutral'] + sorted_summary['Negative']
+    sorted_summary['Total'] = (sorted_summary['Positive'] +
+                               sorted_summary['Neutral'] +
+                               sorted_summary['Negative'])
     sorted_summary = sorted_summary.sort_values(by='Total', ascending=False)
     pdf.add_image(create_aspect_bar_chart(sorted_summary))
     pdf.add_image(create_negative_aspect_bar_chart(sorted_summary, top_n=10))
 
-    # Commented out detailed metrics section as requested
-    """
-    pdf.section("DETAILED METRICS")
-    cols = [
-        "Aspect", "Total Mentions", "Promoters", "Passives", "Detractors", "Sample Quotes"
-    ]
-    rename_columns = {
-        "Aspect": "Aspect",
-        "Total Mentions": "T.M.",
-        "Promoters": "Promo.",
-        "Passives": "Passi.",
-        "Detractors": "Detrac.",
-        "Sample Quotes": "Sample Quotes"
-    }
-    subset = sorted_summary[cols].copy()
-    subset.rename(columns=rename_columns, inplace=True)
-
-    num_cols = len(subset.columns)
-    available_width = pdf.epw - (num_cols + 1) * pdf.c_margin
-    default_col_width = available_width / (num_cols + 1)
-
-    aspect_width = default_col_width * 3.5
-    quotes_width = default_col_width * 3.5
-    remaining_width = available_width - (aspect_width + quotes_width)
-    other_cols_count = num_cols - 2
-    other_col_width = remaining_width / other_cols_count if other_cols_count > 0 else default_col_width
-
-    col_widths = [aspect_width] + [other_col_width] * other_cols_count + [quotes_width]
-    pdf.add_table(subset.head(10), fontsize=8, col_title_fontsize=8, col_widths=col_widths)
-    """
-
+    # Negative reviews
     pdf.section("RECENT NEGATIVE REVIEWS BY ASPECT")
     top_aspects = sorted_summary['Aspect'].head(10).tolist()
-    neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, top_aspects, max_reviews=5)
+    neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, top_aspects, max_reviews=None)
 
     for asp in top_aspects:
         pdf.subheading(f"{asp} - Negative Reviews")
@@ -864,23 +840,25 @@ def create_pdf_report(
         for i, rev in enumerate(reviews, 1):
             pdf.add_paragraph(f"{i}. {safe_quote(rev)}", size=9)
 
+    # Recommendations
     pdf.section("ACTIONABLE RECOMMENDATIONS")
     if recommendations:
         for asp in top_aspects:
             pdf.subheading(f"{asp} - Recommendations")
             recs = recommendations.get(asp, [])
             if recs:
-                for i, rec in enumerate(recs[:5], 1):
+                for i, rec in enumerate(recs, 1):  # no cap
                     pdf.add_paragraph(f"{i}. {rec}", size=9)
             else:
                 pdf.add_paragraph("No actionable recommendations for this aspect.", size=9)
     else:
         for asp in top_aspects:
             pdf.subheading(f"{asp} - Recommendations")
-            recs = build_recommendations_for_aspect(asp, neg_reviews.get(asp, []))
-            for i, rec in enumerate(recs[:5], 1):
+            recs = build_recommendations_for_aspect(asp, neg_reviews.get(asp, []), top_n=None)
+            for i, rec in enumerate(recs, 1):  # no cap
                 pdf.add_paragraph(f"{i}. {rec}", size=9)
 
+    # Return PDF as bytes
     output = pdf.output(dest='S')
     if isinstance(output, str):
         output = output.encode()
@@ -892,7 +870,6 @@ global_detail_df = pd.DataFrame()
 global_summary_df = pd.DataFrame()
 global_top_neg_reviews = {}
 global_nps_col = None
-
 
 def run_analysis(csv_file, review_column=None, nps_column=None, aspects=None, progress=gr.Progress()):
     global global_detail_df, global_summary_df, global_top_neg_reviews, global_nps_col
