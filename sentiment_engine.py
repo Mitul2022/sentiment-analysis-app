@@ -151,13 +151,17 @@ def auto_detect_nps_column(df):
         col = auto_detect_column(df, [cand])
         if col and pd.api.types.is_numeric_dtype(df[col]):
             return col
+
+    # Fallback: look for a numeric column with reasonable integer-like values
     numcols = df.select_dtypes(include=[np.number]).columns
     for col in numcols:
         vals = df[col].dropna()
-        if not vals.empty and (vals.between(0, 10).mean() > 0.9):
-            return col
+        if not vals.empty:
+            uniq = vals.unique()
+            # Heuristic: NPS columns usually have a small integer range (e.g., 0–10, 1–5, 1–7)
+            if len(uniq) >= 3 and np.all(np.equal(np.mod(uniq, 1), 0)):
+                return col
     return None
-
 
 def detect_language_of_reviews(df, review_col):
     try:
@@ -303,8 +307,6 @@ def analyze_review_structured(
                 nps_val = None
         try:
             nps_val = float(nps_val)
-            if not (0 <= nps_val <= 10):
-                nps_val = None
         except (ValueError, TypeError):
             nps_val = None
 
@@ -324,7 +326,6 @@ def analyze_review_structured(
         process_times["aspect_sentiment_extraction"] = round(time.time() - t0, 2)
 
     return pd.DataFrame(records)
-
 
 def groupby_supplier_product(detail_df, user_aspects):
     user_aspects = _normalize_user_aspects(user_aspects)
