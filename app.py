@@ -371,59 +371,64 @@ if auth_controller():
 
     # Visualization Helpers
 
-    def plot_nps_gauge(df):
-        st.markdown("<h3>Net Promoter Score (NPS) Analysis</h3>", unsafe_allow_html=True)
-        nps_colname = None
-        for c in df.columns:
-            if c.lower() in ('nps_score', 'nps', 'score', 'rating', 'net promoter score'):
-                nps_colname = c
-                break
-        if not nps_colname:
-            st.info("No NPS score column found.")
-            return
+def plot_nps_gauge(df):
+    st.markdown("<h3>Net Promoter Score (NPS) Analysis</h3>", unsafe_allow_html=True)
+    nps_colname = None
+    for c in df.columns:
+        if c.lower() in ('nps_score', 'nps', 'score', 'rating', 'net promoter score'):
+            nps_colname = c
+            break
+    if not nps_colname:
+        st.info("No NPS score column found.")
+        return
 
-        scores = df[nps_colname]
-        scores = scores.dropna()
-        scores = scores[(scores >= 0) & (scores <= 10)]
+    scores = df[nps_colname].dropna()
+    if scores.empty:
+        st.info("No valid NPS scores available.")
+        return
 
-        total = len(scores)
-        promoters = ((scores >= 9) & (scores <= 10)).sum()
-        detractors = ((scores >= 0) & (scores <= 6)).sum()
+    # --- Dynamic NPS thresholds (works for any scale) ---
+    min_score, max_score = scores.min(), scores.max()
+    range_size = max_score - min_score if max_score > min_score else 1  # avoid div by zero
 
-        pct_promoters = promoters / total * 100 if total else 0
-        pct_detractors = detractors / total * 100 if total else 0
-        nps_score = pct_promoters - pct_detractors
+    total = len(scores)
+    promoters = (scores >= max_score - range_size * 0.2).sum()
+    detractors = (scores < min_score + range_size * 0.4).sum()
 
-        # Define gauge parameters
-        gauges = [(-100, 0), (0, 30), (30, 70), (70, 100)]
-        colors = ["#d7191c", "#fdae61", "#a6d96a", "#1a9641"]
-        labels = ["Poor", "Fair", "Good", "Excellent"]
-        ticks = [-100, 0, 30, 70, 100]
+    pct_promoters = promoters / total * 100 if total else 0
+    pct_detractors = detractors / total * 100 if total else 0
+    nps_score = pct_promoters - pct_detractors
 
-        fig, ax = plt.subplots(figsize=(8, 1.5))
-        for i, (start, end) in enumerate(gauges):
-            ax.barh(0, end - start, left=start, height=0.6, color=colors[i])
+    # --- Gauge visualization ---
+    gauges = [(-100, 0), (0, 30), (30, 70), (70, 100)]
+    colors = ["#d7191c", "#fdae61", "#a6d96a", "#1a9641"]
+    labels = ["Poor", "Fair", "Good", "Excellent"]
+    ticks = [-100, 0, 30, 70, 100]
 
-        ax.axvline(nps_score, 0, 1, color='navy', lw=3)
-        ax.set_xlim(-100, 100)
-        ax.set_yticks([])
-        ax.set_xlabel("NPS Score", fontsize=11, fontweight='bold')
+    fig, ax = plt.subplots(figsize=(8, 1.5))
+    for i, (start, end) in enumerate(gauges):
+        ax.barh(0, end - start, left=start, height=0.6, color=colors[i])
 
-        for t in ticks:
-            ax.text(t, -0.25, str(t), fontsize=10, fontweight='bold', ha='center')
+    ax.axvline(nps_score, 0, 1, color='navy', lw=3)
+    ax.set_xlim(-100, 100)
+    ax.set_yticks([])
+    ax.set_xlabel("NPS Score", fontsize=11, fontweight='bold')
 
-        for i, (start, end) in enumerate(gauges):
-            ax.text((start + end) / 2, -0.15, labels[i], fontsize=10, fontweight='bold', ha='center')
+    for t in ticks:
+        ax.text(t, -0.25, str(t), fontsize=10, fontweight='bold', ha='center')
 
-        ax.text(nps_score, 0.4, f"{nps_score:.1f}", fontsize=13, fontweight='bold', ha='center', color='navy')
-        plt.box(False)
-        plt.axis('off')
-        plt.tight_layout()
+    for i, (start, end) in enumerate(gauges):
+        ax.text((start + end) / 2, -0.15, labels[i], fontsize=10, fontweight='bold', ha='center')
 
-        st.pyplot(fig)
-        plt.close(fig)
-        st.caption("NPS = %Promoters − %Detractors; scale: -100 (worst) to 100 (best).")
+    ax.text(nps_score, 0.4, f"{nps_score:.1f}", fontsize=13, fontweight='bold', 
+            ha='center', color='navy')
+    plt.box(False)
+    plt.axis('off')
+    plt.tight_layout()
 
+    st.pyplot(fig)
+    plt.close(fig)
+    st.caption("NPS = %Promoters − %Detractors; scale: -100 (worst) to 100 (best).")
 
     def plot_review_length(df, main_col, figsize=(8, 4.5)):
         st.markdown("<h3>Review Length Distribution</h3>", unsafe_allow_html=True)
