@@ -1,3 +1,4 @@
+
 import collections
 import re
 import string
@@ -11,8 +12,6 @@ import html
 import pandas as pd
 import numpy as np
 import spacy
-import matplotlib
-matplotlib.use("Agg")  # headless, faster, avoids GUI overhead
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 import gradio as gr
@@ -23,20 +22,6 @@ from nltk.sentiment import SentimentIntensityAnalyzer
 import nltk
 import difflib
 from nltk.corpus import wordnet as wn
-
-import nltk
-from nltk.corpus import stopwords
-
-# Ensure stopwords are available
-try:
-    _ = stopwords.words("english")
-except LookupError:
-    nltk.download("stopwords", quiet=True)
-
-from rake_nltk import Rake
-
-# Global RAKE instance (reuse across functions)
-RAKE = Rake(min_length=1, max_length=3)
 
 #####################
 # Dependency checks #
@@ -66,65 +51,29 @@ try:
 except LookupError:
     nltk.download("punkt")
 
-# Optimized: disable unused spaCy components (NER, textcat) for big speedup
+# Ensure SpaCy model is available
 try:
-    nlp = spacy.load("en_core_web_sm", disable=["ner", "textcat"])
+    nlp = spacy.load("en_core_web_sm")
 except OSError:
     from spacy.cli import download
     download("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm", disable=["ner", "textcat"])
+    nlp = spacy.load("en_core_web_sm")
 
 sia = SentimentIntensityAnalyzer()
-
-# Safer VADER caching: don't cache very long texts (avoid memory blowup)
-from functools import lru_cache
-
-def _vader_uncached(text: str) -> float:
-    return sia.polarity_scores(text)["compound"]
-
-@lru_cache(maxsize=50_000)
-def _vader_cached(text: str) -> float:
-    return _vader_uncached(text)
-
-def vader_score(text: str) -> float:
-    s = "" if text is None else str(text).strip()
-    # only cache short/medium strings
-    if len(s) <= 200:
-        return _vader_cached(s)
-    return _vader_uncached(s)
-
-# Precompile commonly used regexes
-_RE_NONWORD = re.compile(r'[^\w\s]')
-_RE_MULTISPACE = re.compile(r'\s+')
-_RE_PAGE = re.compile(r'page\s*\d+', re.I)
 
 ARTICLES = {'the', 'a', 'an'}
 DEMONSTRATORS = {'this', 'that', 'these', 'those'}
 
-# Small helper for spaCy piping with n_process fallback
-def _get_nlp_pipe(texts, batch_size=64, n_process=None):
-    try:
-        if n_process is None:
-            n_process = max(1, (os.cpu_count() or 2) - 1)
-        return nlp.pipe(texts, batch_size=batch_size, n_process=n_process)
-    except TypeError:
-        # spaCy older versions or platforms without multi-process support
-        return nlp.pipe(texts, batch_size=batch_size)
 
-# -------------------------
-# Text utilities
-# -------------------------
 def clean_phrase(phrase: str) -> str:
-    phrase = _RE_NONWORD.sub('', (phrase or "").lower()).strip()
+    phrase = re.sub(r'[^\w\s]', '', phrase.lower()).strip()
     tokens = phrase.split()
     while tokens and tokens[0] in ARTICLES.union(DEMONSTRATORS):
         tokens.pop(0)
-    if not tokens:
-        return ""
-    # make_doc avoids running the full pipeline (fast)
-    doc = nlp.make_doc(' '.join(tokens))
-    lemmas = [token.lemma_.lower() for token in doc if not token.is_punct and not token.is_space]
+    doc = nlp(' '.join(tokens))
+    lemmas = [token.lemma_ for token in doc]
     return ' '.join(lemmas).strip()
+
 
 def clean_text_for_pdf(text):
     if not isinstance(text, str):
@@ -142,13 +91,15 @@ def clean_text_for_pdf(text):
     text = ''.join(ch for ch in text if ch.isprintable() or ch in ['\n', '\t', '\r'])
     return text.strip()
 
+
 def safe_quote(q):
     q = str(q)
     if len(q) > 300:
         q = q[:297] + "..."
     q = re.sub(r"(\w{20,})", lambda m: ' '.join(textwrap.wrap(m.group(0), 20)), q)
-    q = _RE_MULTISPACE.sub(' ', q)
+    q = re.sub(r'\s+', ' ', q)
     return q
+
 
 def perfectly_format_numbered_reviews(text, width=85, indent=' '):
     text = re.sub(r'\n{2,}', '\n', text)
@@ -170,15 +121,14 @@ def perfectly_format_numbered_reviews(text, width=85, indent=' '):
         i += 2
     return '\n'.join(output)
 
-# -------------------------
-# Data helpers
-# -------------------------
+
 def auto_detect_column(df, candidates):
     lower_cols = {c.lower(): c for c in df.columns}
     for cand in candidates:
         if cand in lower_cols:
             return lower_cols[cand]
     return None
+
 
 def auto_detect_review_column(df):
     candidates = [
@@ -195,6 +145,7 @@ def auto_detect_review_column(df):
     lengths = df[obj_cols].apply(lambda col: col.fillna("").astype(str).map(len).mean())
     return lengths.idxmax()
 
+
 def auto_detect_nps_column(df):
     candidates = ['nps', 'nps_score', 'score', 'rating', 'net promoter score']
     for cand in candidates:
@@ -208,6 +159,7 @@ def auto_detect_nps_column(df):
             return col
     return None
 
+
 def detect_language_of_reviews(df, review_col):
     try:
         from langdetect import detect
@@ -216,6 +168,7 @@ def detect_language_of_reviews(df, review_col):
     sample_texts = df[review_col].dropna().astype(str).sample(min(20, len(df)), random_state=42)
     lang_counts = Counter(detect(t) for t in sample_texts if t.strip())
     return lang_counts.most_common(1)[0][0] if lang_counts else "unknown"
+
 
 def safe_read_csv(file, **kwargs):
     filename = getattr(file, 'name', file)
@@ -250,19 +203,24 @@ def safe_read_csv(file, **kwargs):
                 except Exception as e:
                     raise RuntimeError(f"Error reading CSV file: {e}")
 
+
 def limit_large_df(df):
     return df
 
 def normalize_nps_scores(nps_series):
+    """
+    Detect NPS scale and normalize to 0-10 if needed.
+    Assumes original scale is 0-10 or 0-5.
+    """
     if nps_series.empty:
         return nps_series
     max_val = nps_series.max()
-    if max_val <= 5:
+    if max_val <= 5:  # Likely a 0-5 scale
         return nps_series * 2
-    elif max_val > 10 and max_val <= 100:
+    elif max_val > 10 and max_val <= 100:  # Possibly percentage (0-100)
         return nps_series / 10
     return nps_series
-
+    
 def aggregate_sentiment(counts):
     pos = counts.get('Positive', 0)
     neu = counts.get('Neutral', 0)
@@ -274,9 +232,11 @@ def aggregate_sentiment(counts):
     else:
         return 'Neutral'
 
+
 def aggregate_aspect_sentiments(occurrences):
     sentiments = [s for _, s, _ in occurrences]
     return aggregate_sentiment(Counter(sentiments))
+
 
 def _normalize_user_aspects(user_aspects):
     if isinstance(user_aspects, str):
@@ -285,10 +245,19 @@ def _normalize_user_aspects(user_aspects):
         aspects = [x.strip().lower() for x in user_aspects if x.strip()]
     return aspects
 
+
 # -------------------------
-# Aspect expansion helpers (returns dict with variants + compiled pattern)
+# Aspect expansion helpers
 # -------------------------
+
 def expand_aspect_variants(aspects, max_synonyms=6):
+    """
+    For each aspect, build a set of variants using:
+    - Lemmatization
+    - WordNet synonyms (context-aware)
+    - Morphological variations (plural forms, split phrases)
+    This helps capture different forms (e.g., 'delivery' <-> 'deliveries', 'delayed delivery').
+    """
     variants = {}
     for asp in aspects:
         base = asp.lower().strip()
@@ -302,11 +271,11 @@ def expand_aspect_variants(aspects, max_synonyms=6):
         # Add split forms for phrases
         if ' ' in base:
             tokens = base.split()
-            cand_set.update(tokens)
+            cand_set.update(tokens)  # individual words
             cand_set.add(' '.join(tokens))
 
-        # WordNet synonyms (filter by relevance)
-        for pos in ('n', 'a', 'v'):
+        # Add WordNet synonyms (filter by relevance)
+        for pos in ('n', 'a', 'v'):  # noun, adj, verb
             try:
                 synsets = wn.synsets(base, pos=pos)
             except Exception:
@@ -320,98 +289,68 @@ def expand_aspect_variants(aspects, max_synonyms=6):
         # Clean all candidates
         cleaned = {clean_phrase(c) for c in cand_set if c}
         cleaned = {c for c in cleaned if len(c) > 1}
-        cleaned_list = sorted(cleaned)
-
-        # build combined regex pattern (longer first to avoid substring matches)
-        pattern = None
-        if cleaned_list:
-            alt = "|".join(re.escape(v) for v in sorted(cleaned_list, key=len, reverse=True))
-            try:
-                pattern = re.compile(r"\b(?:" + alt + r")\b", flags=re.IGNORECASE)
-            except re.error:
-                pattern = None
-
-        variants[base] = {"variants": cleaned_list, "pattern": pattern}
+        variants[base] = sorted(cleaned)
     return variants
 
-# -------------------------
-# Matching helper (uses compiled pattern + fuzzy token checks)
-# -------------------------
-def match_aspect_in_text(text, aspect_info, fuzzy_threshold=0.85):
+
+def match_aspect_in_text(text, aspect_variants, fuzzy_threshold=0.85):
     """
-    aspect_info: either list of variants OR dict {"variants": [...], "pattern": compiled_re}
+    Return True if any variant matches text using:
+    - Whole-word regex
+    - Fuzzy matching on tokens
     """
-    if not text or not aspect_info:
+    if not text or not aspect_variants:
         return False
     text_lc = text.lower()
 
-    # normalize aspect_info
-    if isinstance(aspect_info, dict):
-        pattern = aspect_info.get("pattern")
-        variants = aspect_info.get("variants", [])
-    else:
-        pattern = None
-        variants = aspect_info
-
-    # exact / regex match first
-    if pattern:
-        if pattern.search(text):
+    # Exact whole-word match
+    for var in aspect_variants:
+        if re.search(r"\b" + re.escape(var) + r"\b", text_lc):
             return True
 
-    # token-level fuzzy matching (iterate tokens which are usually fewer)
+    # Fuzzy match against tokens
     tokens = re.findall(r"\w+", text_lc)
-    if not tokens or not variants:
-        return False
-
-    # try rapidfuzz for speed if available
-    try:
-        from rapidfuzz import process as rf_process, fuzz as rf_fuzz
-        # rapidfuzz returns tuple (match, score, idx)
-        score_cutoff = int(fuzzy_threshold * 100)
-        for tok in tokens:
-            match = rf_process.extractOne(
-                tok, variants, scorer=rf_fuzz.QRatio, score_cutoff=score_cutoff
-            )
-            if match:
-                return True
-    except Exception:
-        # fallback to difflib
-        for tok in tokens:
-            close = difflib.get_close_matches(tok, variants, n=1, cutoff=fuzzy_threshold)
-            if close:
-                return True
+    for var in aspect_variants:
+        if len(var) < 3:
+            continue
+        close = difflib.get_close_matches(var, tokens, n=1, cutoff=fuzzy_threshold)
+        if close:
+            return True
 
     return False
 
-# -------------------------
-# Auto-detect aspects via RAKE (optimized)
-# -------------------------
+
 def auto_detect_aspects_via_rake(df, review_col, top_n=10):
+    """
+    Automatically detect candidate aspects from text using:
+    - RAKE for key phrases
+    - Noun chunk frequency
+    Returns list of normalized aspect strings.
+    """
     text_blob = " \n ".join(df[review_col].dropna().astype(str).tolist())
     if not text_blob.strip():
         return []
 
-    # Use global RAKE instance
-    RAKE.extract_keywords_from_text(text_blob)
-    phrases = RAKE.get_ranked_phrases()[:200]
+    rake = Rake(min_length=1, max_length=3)
+    rake.extract_keywords_from_text(text_blob)
+    phrases = rake.get_ranked_phrases()[:200]
 
     cand_counter = Counter()
     for ph in phrases:
-        ph_clean = _RE_NONWORD.sub('', ph.lower()).strip()
-        doc = nlp.make_doc(ph_clean)
-        # we only need POS-like signals; use heuristics on tokens
-        if any(tok.is_alpha() for tok in doc):
+        ph_clean = re.sub(r"[^\w\s]", '', ph.lower()).strip()
+        doc = nlp(ph_clean)
+        if any(tok.pos_ in {'NOUN', 'PROPN', 'ADJ'} for tok in doc):
             cand_counter[ph_clean] += 1
 
-    # Add noun chunks from sample reviews using nlp.pipe
-    sample_texts = df[review_col].dropna().astype(str).sample(min(200, len(df)), random_state=42).tolist()
-    for doc in _get_nlp_pipe(sample_texts, batch_size=32):
-        for nc in getattr(doc, "noun_chunks", []):
-            nc_text = _RE_NONWORD.sub('', nc.text.lower()).strip()
+    # Add noun chunks from sample reviews
+    sample_texts = df[review_col].dropna().astype(str).sample(min(200, len(df)), random_state=42)
+    for t in sample_texts:
+        for nc in nlp(t).noun_chunks:
+            nc_text = re.sub(r"[^\w\s]", '', nc.text.lower()).strip()
             if 1 <= len(nc_text.split()) <= 3:
                 cand_counter[nc_text] += 1
 
-    # Fallback to frequent words if nothing detected
+    # Fallback to frequent nouns if nothing detected
     if not cand_counter:
         words = re.findall(r"\w+", text_blob.lower())
         counts = Counter(words).most_common(200)
@@ -429,39 +368,41 @@ def auto_detect_aspects_via_rake(df, review_col, top_n=10):
             seen.add(n)
     return normalized[:top_n]
 
+
 # -------------------------
-# Core extraction (accepts parsed doc or raw text; uses precomputed variants_map)
+# Core extraction function
 # -------------------------
-def extract_dynamic_aspects_user(doc_or_text, user_aspects, nps_val=None, variants_map=None):
+
+def extract_dynamic_aspects_user(review_text, user_aspects, nps_val=None):
     """
-    Accepts either a spaCy doc (preferred) or raw text. Uses variants_map (returned by expand_aspect_variants)
-    to avoid recomputing synonyms per review.
+    Improved dynamic aspect extraction with hybrid sentiment logic:
+    - Uses text sentiment as primary
+    - If NPS score is provided, adjusts sentiment:
+        * NPS ≥ 9 → Positive (unless text is extremely negative)
+        * NPS ≤ 6 → Negative (unless text is extremely positive)
+    - Adds flags for NPS-text mismatches
+    Returns list of dicts for each detected aspect with enhanced metadata.
     """
-    # parse if needed
-    if isinstance(doc_or_text, str):
-        doc = nlp(str(doc_or_text))
-    else:
-        doc = doc_or_text
+    review_text = html.unescape(str(review_text))
+    doc = nlp(review_text)
 
     # Auto-detect aspects if user_aspects is empty
     if not user_aspects:
-        noun_chunks = [chunk.lemma_.lower() for chunk in getattr(doc, "noun_chunks", []) if len(chunk.text.strip()) > 2]
+        noun_chunks = [chunk.lemma_.lower() for chunk in doc.noun_chunks if len(chunk.text.strip()) > 2]
         user_aspects = list(set(noun_chunks[:10]))
 
     user_aspects = _normalize_user_aspects(user_aspects)
-
-    if variants_map is None:
-        variants_map = expand_aspect_variants(user_aspects)
-
+    variants_map = expand_aspect_variants(user_aspects)
     extracted = defaultdict(list)
 
+    # --- Analyze sentence-level sentiment using VADER ---
     for sent in doc.sents:
         sent_text = sent.text.strip()
         if not sent_text:
             continue
 
         # Base sentiment from VADER
-        sent_score = vader_score(sent_text)
+        sent_score = sia.polarity_scores(sent_text)["compound"]
         if sent_score >= 0.3:
             base_label = "Positive"
         elif sent_score <= -0.3:
@@ -477,33 +418,33 @@ def extract_dynamic_aspects_user(doc_or_text, user_aspects, nps_val=None, varian
         if nps_val is not None and 0 <= nps_val <= 10:
             if nps_val >= 9:  # Promoter
                 if base_label == "Negative" and sent_score <= -0.7:
+                    # Strong contradiction - keep Negative but flag mismatch
                     mismatch_flag = True
                 else:
                     final_label = "Positive"
                     sentiment_source = "Hybrid (NPS Override)"
             elif nps_val <= 6:  # Detractor
                 if base_label == "Positive" and sent_score >= 0.7:
+                    # Strong contradiction - keep Positive but flag mismatch
                     mismatch_flag = True
                 else:
                     final_label = "Negative"
                     sentiment_source = "Hybrid (NPS Override)"
-            elif nps_val in [7, 8]:
+            elif nps_val in [7, 8]:  # Passive
+                # Keep text-based sentiment but note hybrid source
                 sentiment_source = "Hybrid (NPS Considered)"
 
         # Match aspects within sentence
         for aspect in user_aspects:
-            aspect_info = variants_map.get(aspect)
-            # if variants_map entry missing, fallback to simple list with aspect
-            if aspect_info is None:
-                aspect_info = {"variants": [aspect], "pattern": re.compile(r"\b" + re.escape(aspect) + r"\b", flags=re.IGNORECASE)}
-            if match_aspect_in_text(sent_text, aspect_info):
+            aspect_variants = variants_map.get(aspect, [aspect])
+            if match_aspect_in_text(sent_text, aspect_variants):
                 aspect_key = aspect.lower().strip()
                 extracted[aspect_key].append((sent_text, final_label, sent_text, sentiment_source, mismatch_flag))
 
     # Build structured data
     data = []
     for aspect, mentions in extracted.items():
-        agg_sent = aggregate_aspect_sentiments([(m[1], m[1], m[1]) for m in mentions])
+        agg_sent = aggregate_aspect_sentiments([(m[1], m[1], m[1]) for m in mentions])  # Use final labels for aggregation
         context = "; ".join(sorted(set(m[0] for m in mentions)))
         quotes = [m[2] for m in mentions]
         mismatch = any(m[4] for m in mentions)
@@ -524,7 +465,12 @@ def extract_dynamic_aspects_user(doc_or_text, user_aspects, nps_val=None, varian
 # -------------------------
 # Analysis pipeline
 # -------------------------
+
 def normalize_single_nps_value(nps_val):
+    """
+    Normalize a single NPS value to 0–10 scale.
+    Supports scales like 0–5, 0–10, 0–100.
+    """
     try:
         nps_val = float(nps_val)
         if nps_val < 0:
@@ -550,8 +496,8 @@ def analyze_review_structured(df, review_col, nps_col=None, user_aspects=None, p
     # Auto-detect aspects if user passed blank or asked for 'auto'
     if not user_aspects or (isinstance(user_aspects, str) and not user_aspects.strip()):
         detected = auto_detect_aspects_via_rake(df, review_col, top_n=10)
-        if not detected:
-            detected = ["delivery", "price", "quality", "service"]
+        if not detected:  # fallback if Rake fails
+            detected = ["Delivery", "Price", "Quality", "Service"]
         user_aspects = detected
     else:
         user_aspects = _normalize_user_aspects(user_aspects)
@@ -559,76 +505,51 @@ def analyze_review_structured(df, review_col, nps_col=None, user_aspects=None, p
     if not user_aspects:
         raise ValueError("Please provide at least one aspect or allow auto-detection by passing blank or 'auto'.")
 
-    # Precompute aspect variants once
-    variants_map = expand_aspect_variants(user_aspects)
-
     records = []
     total = len(df)
 
-    # placeholder for Streamlit progress
+    placeholder = None
     try:
         placeholder = st.empty()
     except Exception:
         placeholder = None
 
-    # Prepare texts and docs (batched)
-    texts = df[review_col].fillna("").astype(str).tolist()
-    docs = _get_nlp_pipe(texts, batch_size=64)
-
-    next_progress = 0.05  # progress update every 5%
-
-    # iterate docs and rows together
-    # Use itertuples-like access for speed; df.itertuples returns namedtuples in same column order
-    for idx, (doc, row) in enumerate(zip(docs, df.itertuples(index=False, name=None)), start=1):
-        text = doc.text.strip()
+    for idx, (i, row) in enumerate(df.iterrows(), 1):
+        text = str(row[review_col]).strip()
         if not text:
             continue
 
-        # normalize NPS value
-        nps_val = None
-        if nps_col:
-            try:
-                # Try to fetch by attribute name (if namedtuple had field names)
-                # This may not work for nameless tuples; use df.at fallback below.
-                nps_val = getattr(row, nps_col)
-            except Exception:
-                try:
-                    nps_val = df.at[df.index[idx-1], nps_col]
-                except Exception:
-                    nps_val = None
+        # Normalize NPS value
+        nps_val = row.get(nps_col) if nps_col else None
+        if isinstance(nps_val, str):
+            nps_val = nps_val.strip()
+            if nps_val.lower() in ('none', '', 'nan'):
+                nps_val = None
         nps_val = normalize_single_nps_value(nps_val)
 
-        # extract aspects & sentiments using hybrid logic (pass parsed doc & variants_map)
-        aspects = extract_dynamic_aspects_user(doc, user_aspects, nps_val=nps_val, variants_map=variants_map)
-
+        # Extract aspects and sentiments using hybrid logic
+        aspects = extract_dynamic_aspects_user(text, user_aspects, nps_val=nps_val)
         for asp in aspects:
-            asp["Review_ID"] = idx
+            asp["Review_ID"] = i if i is not None else idx
             asp["Review"] = text
             asp["NPS_Score"] = nps_val
+            # Include supplier/product if available
             for field in ['supplier_name', 'product_fullname']:
                 if field in df.columns:
-                    try:
-                        asp[field] = df.at[df.index[idx-1], field]
-                    except Exception:
-                        asp[field] = None
+                    asp[field] = row[field]
             records.append(asp)
 
-        # throttle progress updates
-        if placeholder is not None and (idx / total) >= next_progress:
+        if placeholder is not None:
             try:
                 placeholder.text(f"Processed {idx:,}/{total:,} reviews...")
             except Exception:
                 pass
-            next_progress += 0.05
 
     if process_times is not None:
         process_times["aspect_sentiment_extraction"] = round(time.time() - t0, 2)
 
     return pd.DataFrame(records)
 
-# -------------------------
-# Grouping / summarization
-# -------------------------
 def groupby_supplier_product(detail_df, user_aspects):
     user_aspects = _normalize_user_aspects(user_aspects)
     group_cols = [col for col in ['supplier_name', 'product_fullname'] if col in detail_df.columns]
@@ -661,6 +582,7 @@ def groupby_supplier_product(detail_df, user_aspects):
             rec["Promoters"] = rec["Passives"] = rec["Detractors"] = 0
         rows.append(rec)
     return pd.DataFrame(rows)
+
 
 def generate_sentiment_summary(df):
     if df.empty:
@@ -726,6 +648,7 @@ def generate_sentiment_summary(df):
         })
     return pd.DataFrame(summary_rows).sort_values(by="Total Mentions", ascending=False)
 
+
 def benchmark_kpis(df_summary, df_detail=None):
     total_mentions = int(df_summary["Total Mentions"].sum()) if not df_summary.empty else 0
     pos_total = int(df_summary["Positive"].sum()) if not df_summary.empty else 0
@@ -758,9 +681,7 @@ def benchmark_kpis(df_summary, df_detail=None):
 
     return pd.DataFrame([{"KPI": k, "Value": v} for k, v in data.items()])
 
-# -------------------------
-# Charts
-# -------------------------
+
 def create_aspect_bar_chart(df_summary):
     import matplotlib.pyplot as plt
     from io import BytesIO
@@ -778,9 +699,9 @@ def create_aspect_bar_chart(df_summary):
     x = np.arange(len(aspects))
     width = 0.25
 
-    bars_pos = ax.bar(x - width, positive, width, label='Positive')
-    bars_neu = ax.bar(x, neutral, width, label='Neutral')
-    bars_neg = ax.bar(x + width, negative, width, label='Negative')
+    bars_pos = ax.bar(x - width, positive, width, label='Positive', color='#2ECC71')  # Green
+    bars_neu = ax.bar(x, neutral, width, label='Neutral', color='#95A5A6')           # Gray
+    bars_neg = ax.bar(x + width, negative, width, label='Negative', color='#E74C3C') # Red
 
     ax.set_xlabel('Aspect')
     ax.set_ylabel('Mentions')
@@ -815,12 +736,14 @@ def create_aspect_bar_chart(df_summary):
     buf.seek(0)
     return buf
 
+
 def create_negative_aspect_bar_chart(df_summary, top_n=10):
     top_neg = df_summary.sort_values(by='Negative', ascending=False).head(top_n).copy()
     fig, ax = plt.subplots(figsize=(8, 6))
     bars = ax.bar(
         top_neg['Aspect'].apply(lambda x: x.title()),
-        top_neg['Negative']
+        top_neg['Negative'],
+        color='#E74C3C'  # Red for Negative
     )
     ax.set_title(f"Most Discussed Negative Aspects by Sentiment", fontsize=14, fontweight='bold')
     ax.set_ylabel("Negative Mentions")
@@ -844,9 +767,7 @@ def create_negative_aspect_bar_chart(df_summary, top_n=10):
     buf.seek(0)
     return buf
 
-# -------------------------
-# PDF Report class
-# -------------------------
+
 class PDFReport(FPDF):
     def __init__(self):
         super().__init__()
@@ -954,9 +875,12 @@ class PDFReport(FPDF):
         os.remove(image_path)
         self.ln()
 
+
 # -------------------------
 # Recommendation builder
 # -------------------------
+
+# Updated keyword-action mapping (broader coverage + more concrete suggestions)
 KEYWORD_ACTIONS = {
     'late': [
         'Audit last-mile delivery processes to reduce delays',
@@ -996,26 +920,38 @@ KEYWORD_ACTIONS = {
     ]
 }
 
+
 def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
+    """
+    Build dynamic actionable recommendations for a given aspect based on negative reviews.
+    Enhancements:
+    - Extract top pain points using RAKE + NLP
+    - Map critical keywords to predefined best practices
+    - Always return meaningful suggestions (even if no strong keyword matches)
+    """
     aspect_key = aspect.lower().strip() if isinstance(aspect, str) else str(aspect)
     if not neg_reviews or all(not str(r).strip() for r in neg_reviews):
         return [f"No actionable recommendations for '{aspect_key.title()}' at this time."]
 
+    # Combine negative reviews into one text blob
     reviews_blob = " ".join([str(r).lower() for r in neg_reviews if r])
     reviews_blob = re.sub(rf"\b{re.escape(aspect_key)}\b", "", reviews_blob)
 
-    # Use the global RAKE instance (resets internal state on extract)
-    RAKE.extract_keywords_from_text(reviews_blob)
-    ranked_phrases = RAKE.get_ranked_phrases()[:30]
+    # Extract key phrases using RAKE
+    rake = Rake(min_length=1, max_length=3)
+    rake.extract_keywords_from_text(reviews_blob)
+    ranked_phrases = rake.get_ranked_phrases()[:30]
 
+    # Fallback: most frequent nouns/adjectives if RAKE is sparse
     if not ranked_phrases:
         doc = nlp(reviews_blob)
-        words = [t.lemma_ for t in doc if getattr(t, "pos_", None) in {"NOUN", "ADJ"} and not getattr(t, "is_stop", False)]
+        words = [t.lemma_ for t in doc if t.pos_ in {"NOUN", "ADJ"} and not t.is_stop]
         ranked_phrases = [w for w, _ in Counter(words).most_common(top_n)]
 
+    # Filter duplicates and clean
     top_issues = []
     for ph in ranked_phrases:
-        ph_clean = _RE_NONWORD.sub('', ph.lower()).strip()
+        ph_clean = re.sub(r"[^\w\s]", '', ph.lower()).strip()
         if ph_clean and ph_clean not in top_issues:
             top_issues.append(ph_clean)
         if len(top_issues) >= top_n:
@@ -1024,6 +960,7 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
     recs = []
     aspect_nice = aspect_key.title()
 
+    # Map detected issues to predefined actions
     mapped_actions = []
     for issue in top_issues:
         for k, actions in KEYWORD_ACTIONS.items():
@@ -1032,13 +969,16 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
                     if act not in mapped_actions:
                         mapped_actions.append(act)
 
+    # Always include high-level context recommendations
     if top_issues:
         issues_str = "', '".join(top_issues[:3])
         recs.append(f"Customers frequently mention '{issues_str}' related to {aspect_nice}. Investigate root causes immediately.")
         recs.append(f"Prioritize resolving '{top_issues[0]}' to improve {aspect_nice} experience.")
 
+    # Add mapped actions for stronger operational fixes
     recs.extend(mapped_actions)
 
+    # Add fallback generic recommendations if list is short
     while len(recs) < top_n:
         if len(recs) == 2:
             recs.append(f"Review all touchpoints impacting {aspect_nice} and set clear SLAs.")
@@ -1049,6 +989,7 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
         else:
             break
 
+    # Remove duplicates and cap size
     final = []
     for r in recs:
         if r not in final:
@@ -1058,16 +999,17 @@ def build_recommendations_for_aspect(aspect, neg_reviews, top_n=5):
 
     return final
 
-# -------------------------
-# Top negative reviews by aspect (optimized)
-# -------------------------
+
 def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
+    """
+    Pull top negative reviews for each aspect:
+    - Based on overall and aspect-level sentiment
+    - Deduplicates and cleans text for PDF display
+    """
     def normalize(text):
-        if not isinstance(text, str):
-            text = str(text)
-        text = _RE_PAGE.sub('', text)
+        text = re.sub(r'page\s*\d+', '', text, flags=re.I)
         text = re.sub(r'^\d+\.\s*', '', text)
-        text = _RE_MULTISPACE.sub(' ', text)
+        text = re.sub(r'\s+', ' ', text)
         return text.strip().lower()
 
     reviews = {}
@@ -1077,7 +1019,10 @@ def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
         return reviews
 
     unique_reviews = detail_df[['Review_ID', 'Review']].drop_duplicates()
-    overall_scores = {row['Review_ID']: vader_score(str(row['Review'])) for _, row in unique_reviews.iterrows()}
+    overall_scores = {
+        row['Review_ID']: sia.polarity_scores(str(row['Review']))['compound']
+        for _, row in unique_reviews.iterrows()
+    }
 
     for aspect in aspects:
         aspect_key = aspect.lower().strip()
@@ -1093,7 +1038,7 @@ def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
 
         if not filtered.empty:
             filtered['Overall_Score'] = filtered['Review_ID'].map(overall_scores)
-            filtered['Context_Score'] = filtered['Aspect_Context'].astype(str).apply(vader_score)
+            filtered['Context_Score'] = filtered['Aspect_Context'].apply(lambda x: sia.polarity_scores(str(x))['compound'])
             filtered['Is_Overall_Negative'] = filtered['Overall_Score'] <= -0.3
             filtered = filtered.sort_values(['Is_Overall_Negative', 'Context_Score'], ascending=[False, True])
 
@@ -1114,9 +1059,6 @@ def extract_top_negative_reviews_by_aspect(detail_df, aspects, max_reviews=5):
 
     return reviews
 
-# -------------------------
-# PDF builder
-# -------------------------
 def create_pdf_report(
     detail_df,
     summary_df,
@@ -1124,10 +1066,22 @@ def create_pdf_report(
     recommendations=None,
     processing_stats=None
 ):
+    """
+    Generate a comprehensive, executive-friendly PDF report with:
+    - Data processing summary
+    - KPI overview
+    - Visual sentiment distribution
+    - Top negative reviews per aspect
+    - Actionable recommendations (dynamic & mapped to pain points)
+    """
+
     pdf = PDFReport()
     pdf.set_auto_page_break(auto=True, margin=16)
     pdf.add_page()
 
+    # -------------------------
+    # EXECUTIVE SUMMARY
+    # -------------------------
     pdf.section("EXECUTIVE SUMMARY & KEY INSIGHTS")
     if processing_stats:
         def safe_format(value):
@@ -1166,10 +1120,16 @@ def create_pdf_report(
             f"({top['Total Mentions']} mentions)."
         )
 
+    # -------------------------
+    # KPI OVERVIEW
+    # -------------------------
     pdf.section("KEY METRICS & KPI OVERVIEW")
     kpi_df = benchmark_kpis(summary_df, detail_df)
     pdf.add_table(kpi_df, title="Sentiment & NPS Score KPIs")
 
+    # -------------------------
+    # SENTIMENT DISTRIBUTION VISUALS
+    # -------------------------
     pdf.section("SENTIMENT DISTRIBUTION BY TOP ASPECTS")
     sorted_summary = summary_df.copy()
     if 'Total Mentions' not in sorted_summary.columns:
@@ -1182,9 +1142,13 @@ def create_pdf_report(
         sorted_summary['Total'] = sorted_summary['Total Mentions']
     sorted_summary = sorted_summary.sort_values(by='Total', ascending=False)
 
+    # Add charts: overall aspect sentiment and negative aspect breakdown
     pdf.add_image(create_aspect_bar_chart(sorted_summary))
     pdf.add_image(create_negative_aspect_bar_chart(sorted_summary, top_n=10))
 
+    # -------------------------
+    # NEGATIVE REVIEWS SECTION
+    # -------------------------
     pdf.section("RECENT NEGATIVE REVIEWS BY ASPECT")
     top_aspects = sorted_summary['Aspect'].head(10).tolist()
     neg_reviews = extract_top_negative_reviews_by_aspect(detail_df, top_aspects, max_reviews=5)
@@ -1198,6 +1162,9 @@ def create_pdf_report(
         for i, rev in enumerate(reviews, 1):
             pdf.add_paragraph(f"{i}. {safe_quote(rev)}", size=9)
 
+    # -------------------------
+    # ACTIONABLE RECOMMENDATIONS
+    # -------------------------
     pdf.section("ACTIONABLE RECOMMENDATIONS")
     for asp in top_aspects:
         pdf.subheading(f"{asp.title()} - Recommendations")
@@ -1212,6 +1179,9 @@ def create_pdf_report(
         else:
             pdf.add_paragraph("No actionable recommendations available.", size=9)
 
+    # -------------------------
+    # OUTPUT AS BYTES
+    # -------------------------
     output = pdf.output(dest='S')
     if isinstance(output, str):
         output = output.encode()
@@ -1224,6 +1194,7 @@ global_detail_df = pd.DataFrame()
 global_summary_df = pd.DataFrame()
 global_top_neg_reviews = {}
 global_nps_col = None
+
 
 def run_analysis(csv_file, review_column=None, nps_column=None, aspects=None, progress=gr.Progress()):
     global global_detail_df, global_summary_df, global_top_neg_reviews, global_nps_col
@@ -1244,6 +1215,7 @@ def run_analysis(csv_file, review_column=None, nps_column=None, aspects=None, pr
         if lang != 'en':
             return f"Detected language: {lang}. Only English is supported.", None, None, None
 
+        # if user passed blank or 'auto', the analyzer will auto-detect aspects
         user_aspects = None
         if aspects and str(aspects).strip():
             user_aspects = [a.strip() for a in str(aspects).split(",") if a.strip()]
@@ -1279,9 +1251,7 @@ def run_analysis(csv_file, review_column=None, nps_column=None, aspects=None, pr
         import traceback
         return f"Error: {e}\n{traceback.format_exc()}", None, None, None
 
-# -------------------------
-# Simple chatbot helper
-# -------------------------
+
 def chatbot_query(message, history):
     if global_summary_df.empty or not global_top_neg_reviews:
         return "", history + [[message, "Please upload and analyze data first."]]
@@ -1333,6 +1303,7 @@ def chatbot_query(message, history):
         else:
             actual = rows.iloc[0]['Aspect']
             reviews = global_top_neg_reviews.get(actual, [])
+            # fallback: if no neg reviews found, try searching detail df for any context matches
             if not reviews and not global_detail_df.empty:
                 matches = global_detail_df[global_detail_df['Aspect_Context'].str.contains(re.escape(actual), case=False, na=False)]
                 reviews = matches['Review'].dropna().astype(str).head(5).tolist()
@@ -1353,6 +1324,7 @@ def chatbot_query(message, history):
 
     history.append([message, response])
     return "", history
+
 
 # ==== Gradio UI ====
 with gr.Blocks() as demo:
