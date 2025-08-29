@@ -350,9 +350,14 @@ def groupby_supplier_product(detail_df, user_aspects):
         valid_nps = group["NPS_Score"].dropna()
         if not valid_nps.empty:
             rec["Avg_NPS"] = round(valid_nps.mean(), 2)
-            rec["Promoters"] = valid_nps[(valid_nps >= 9) & (valid_nps <= 10)].count()
-            rec["Passives"] = valid_nps[(valid_nps >= 7) & (valid_nps <= 8)].count()
-            rec["Detractors"] = valid_nps[(valid_nps >= 0) & (valid_nps <= 6)].count()
+
+            min_score, max_score = valid_nps.min(), valid_nps.max()
+            range_size = max_score - min_score
+
+            rec["Promoters"] = valid_nps[valid_nps >= max_score - range_size * 0.2].count()
+            rec["Passives"] = valid_nps[(valid_nps >= min_score + range_size * 0.4) &
+                                        (valid_nps < max_score - range_size * 0.2)].count()
+            rec["Detractors"] = valid_nps[valid_nps < min_score + range_size * 0.4].count()
         else:
             rec["Avg_NPS"] = "N/A"
             rec["Promoters"] = rec["Passives"] = rec["Detractors"] = 0
@@ -378,9 +383,14 @@ def generate_sentiment_summary(df):
         if "NPS_Score" in group.columns and group["NPS_Score"].notna().any():
             valid_nps = group["NPS_Score"].dropna()
             avg_nps = valid_nps.mean() if not valid_nps.empty else np.nan
-            promoters = valid_nps[(valid_nps >= 9) & (valid_nps <= 10)].count()
-            passives = valid_nps[(valid_nps >= 7) & (valid_nps <= 8)].count()
-            detractors = valid_nps[(valid_nps >= 0) & (valid_nps <= 6)].count()
+
+            min_score, max_score = valid_nps.min(), valid_nps.max()
+            range_size = max_score - min_score
+
+            promoters = valid_nps[valid_nps >= max_score - range_size * 0.2].count()
+            passives = valid_nps[(valid_nps >= min_score + range_size * 0.4) &
+                                 (valid_nps < max_score - range_size * 0.2)].count()
+            detractors = valid_nps[valid_nps < min_score + range_size * 0.4].count()
 
         raw_quotes = []
         for quotes_cell in group["Quotes"]:
@@ -432,21 +442,22 @@ def benchmark_kpis(df_summary, df_detail=None):
     }
 
     if df_detail is not None and "NPS_Score" in df_detail.columns:
-        # Filter valid NPS scores in [0,10] range
         nps_vals = df_detail["NPS_Score"].dropna()
-        nps_vals = nps_vals[(nps_vals >= 0) & (nps_vals <= 10)]
+        if not nps_vals.empty:
+            min_score, max_score = nps_vals.min(), nps_vals.max()
+            range_size = max_score - min_score
 
-        total = len(nps_vals)
-        promoters = nps_vals[(nps_vals >= 9) & (nps_vals <= 10)].count()
-        detractors = nps_vals[(nps_vals >= 0) & (nps_vals <= 6)].count()
-        nps_score = (promoters / total * 100) - (detractors / total * 100) if total else 0
+            total = len(nps_vals)
+            promoters = nps_vals[nps_vals >= max_score - range_size * 0.2].count()
+            detractors = nps_vals[nps_vals < min_score + range_size * 0.4].count()
+            nps_score = (promoters / total * 100) - (detractors / total * 100) if total else 0
 
-        data.update({
-            "Average NPS Score": f"{nps_vals.mean():.2f}" if total else "N/A",
-            "NPS Score (%)": f"{nps_score:.1f}",
-            "Promoters": f"{promoters}",
-            "Detractors": f"{detractors}",
-        })
+            data.update({
+                "Average NPS Score": f"{nps_vals.mean():.2f}" if total else "N/A",
+                "NPS Score (%)": f"{nps_score:.1f}",
+                "Promoters": f"{promoters}",
+                "Detractors": f"{detractors}",
+            })
 
     return pd.DataFrame([{"KPI": k, "Value": v} for k, v in data.items()])
 
